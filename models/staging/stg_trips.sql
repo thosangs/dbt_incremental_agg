@@ -5,19 +5,23 @@
 }}
 
 -- Staging model for NYC Yellow Taxi trips
--- Reads from parquet files in data/raw/ directory
+-- Reads from partitioned Parquet files in data/partitioned/ directory
+-- Data is partitioned by trip_date for efficient Spark operations
 -- This is a view (always fresh) since incremental logic is handled
 -- at the aggregation level in agg_daily_revenue.
 
 WITH raw_trips AS (
     SELECT *
-    FROM parquet.`/data/raw/yellow_tripdata_*.parquet`
+    FROM parquet.`/data/partitioned`
+    -- trip_date is already a partition column, so we can filter efficiently
 ),
 source AS (
     SELECT
         -- Read columns as-is first (INT32 from Parquet), then cast
+        -- trip_date is already a partition column in partitioned data
         tpep_pickup_datetime,
         tpep_dropoff_datetime,
+        trip_date,
         VendorID,
         total_amount,
         fare_amount,
@@ -33,6 +37,7 @@ source AS (
     WHERE tpep_pickup_datetime IS NOT NULL
       AND total_amount IS NOT NULL
       AND total_amount > 0
+      AND trip_date IS NOT NULL
 ),
 casted AS (
     SELECT
@@ -40,6 +45,7 @@ casted AS (
         ROW_NUMBER() OVER (ORDER BY tpep_pickup_datetime, VendorID) AS trip_id,
         CAST(tpep_pickup_datetime AS TIMESTAMP) AS trip_ts,
         CAST(tpep_dropoff_datetime AS TIMESTAMP) AS dropoff_ts,
+        CAST(trip_date AS DATE) AS trip_date,
         CAST(VendorID AS INT) AS vendor_id,
         CAST(total_amount AS DOUBLE) AS total_amount,
         CAST(fare_amount AS DOUBLE) AS fare_amount,
@@ -58,7 +64,7 @@ final AS (
         trip_id,
         trip_ts,
         dropoff_ts,
-        CAST(DATE_TRUNC('day', trip_ts) AS DATE) AS trip_date,
+        trip_date,
         vendor_id,
         total_amount,
         fare_amount,

@@ -15,12 +15,14 @@ build: ## Build container images
 
 setup: build ## Build images and prepare runtime dirs
 	@echo "[setup] Creating runtime dirs"
-	@mkdir -p data/warehouse data/raw
-	@chmod -R 777 data/warehouse data/raw || true
+	@mkdir -p data/warehouse data/raw data/partitioned
+	@chmod -R 777 data/warehouse data/raw data/partitioned || true
 
-download-data: ## Download NYC taxi data (default: 2022-2023)
+download-data: ## Download NYC taxi data (default: 2022-2023) and partition by date
 	@echo "[download] Downloading NYC Yellow Taxi data"
 	$(PY) scripts/download_nyc_taxi_data.py --output-dir /data/raw
+	@echo "[partition] Partitioning data by trip_date"
+	$(PY) scripts/partition_nyc_taxi_data.py --input-dir /data/raw --output-dir /data/partitioned --delete-source
 
 download-data-late: ## Download additional older data for late-arriving demo
 	@echo "[download] Downloading older NYC taxi data for late-arriving demo"
@@ -72,10 +74,16 @@ sqlpad-logs: ## Tail SQLPad logs
 	@echo "[sqlpad] Tailing logs (Ctrl-C to stop)"
 	docker compose logs -f sqlpad | cat
 
+partition-data: ## Partition raw Parquet files by trip_date
+	@echo "[partition] Partitioning data by trip_date"
+	$(PY) scripts/partition_nyc_taxi_data.py --input-dir /data/raw --output-dir /data/partitioned --delete-source
+
 demo-late-data: ## Download additional older data to simulate late-arriving trips
 	@echo "[demo] Downloading older data to simulate late-arriving trips"
 	$(PY) scripts/download_nyc_taxi_data.py --start-year 2021 --start-month 1 --end-year 2021 --end-month 3 --output-dir /data/raw --skip-existing
-	@echo "[demo] Late-arriving data downloaded. Re-run 'make run' to process."
+	@echo "[partition] Partitioning late-arriving data"
+	$(PY) scripts/partition_nyc_taxi_data.py --input-dir /data/raw --output-dir /data/partitioned --delete-source
+	@echo "[demo] Late-arriving data downloaded and partitioned. Re-run 'make run' to process."
 
 demo-01: ## Run Demo v1: Full Batch Processing
 	@echo "[demo-v1] Running full batch models"

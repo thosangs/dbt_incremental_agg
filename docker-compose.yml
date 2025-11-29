@@ -8,6 +8,7 @@ services:
       - ./data:/data
     environment:
       DBT_PROFILES_DIR: /app/profiles
+      SPARK_MASTER: spark://spark-master:7077
     depends_on:
       - spark-thrift
     command: ["sleep", "infinity"]
@@ -63,7 +64,9 @@ services:
       chmod -R 777 /data/warehouse 2>/dev/null || true &&
       /opt/spark/sbin/start-thriftserver.sh
       --master spark://spark-master:7077
-      --conf spark.sql.warehouse.dir=/data/warehouse &&
+      --conf spark.sql.warehouse.dir=/data/warehouse
+      --conf spark.sql.sources.partitionOverwriteMode=dynamic
+      --conf hive.exec.dynamic.partition.mode=nonstrict &&
       tail -f /opt/spark/logs/*
       "
     ports:

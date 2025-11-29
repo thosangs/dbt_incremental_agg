@@ -85,7 +85,7 @@ Wait a few seconds for Spark Thrift server to be ready.
 4. **Download NYC taxi data and run a demo**
 
 ```bash
-# Download NYC Yellow Taxi data (default: 2022-2023, ~2GB)
+# Download NYC Yellow Taxi data (default: 2024, ~1GB)
 make download-data
 
 # Run Demo 01: Full Batch

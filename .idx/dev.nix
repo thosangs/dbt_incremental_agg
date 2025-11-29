@@ -46,7 +46,7 @@
       onCreate = {
         # Example: install JS dependencies from NPM
         # npm-install = "npm install";
-        default.openFiles = [ "README.md" ];
+        # default.openFiles = [ "README.md" ];
       };
       # Runs when the workspace is (re)started
       onStart = {
