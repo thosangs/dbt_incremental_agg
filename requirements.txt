@@ -1,0 +1,7 @@
+dbt-spark[PyHive]==1.8.2
+pyspark==3.5.0
+pyhive[hive]==0.7.0
+sasl==0.3.1
+thrift==0.16.0
+thrift-sasl==0.4.3
+

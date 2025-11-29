@@ -1,0 +1,97 @@
+services:
+  dbt:
+    build: .
+    container_name: pycon25-dbt
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - ./data:/data
+    environment:
+      DBT_PROFILES_DIR: /app/profiles
+    depends_on:
+      - spark-thrift
+    command: ["sleep", "infinity"]
+    networks:
+      - spark-network
+
+  spark-master:
+    image: bitnami/spark:3.5
+    container_name: pycon25-spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+
+  spark-worker:
+    image: bitnami/spark:3.5
+    container_name: pycon25-spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+
+  spark-thrift:
+    image: bitnami/spark:3.5
+    container_name: pycon25-spark-thrift
+    depends_on:
+      - spark-master
+      - spark-worker
+    environment:
+      - SPARK_MODE=thrift
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "10000:10000"
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+
+  sqlpad:
+    image: sqlpad/sqlpad:latest
+    container_name: pycon25-sqlpad
+    depends_on:
+      - spark-thrift
+    ports:
+      - "3000:3000"
+    environment:
+      SQLPAD_ADMIN: admin@example.com
+      SQLPAD_ADMIN_PASSWORD: changeme
+      SQLPAD_APP_LOG_LEVEL: info
+      SQLPAD_WEB_LOG_LEVEL: warn
+    volumes:
+      - ./data:/data
+      - sqlpad-data:/var/lib/sqlpad
+    restart: unless-stopped
+    networks:
+      - spark-network
+
+networks:
+  spark-network:
+    driver: bridge
+
+volumes:
+  sqlpad-data:

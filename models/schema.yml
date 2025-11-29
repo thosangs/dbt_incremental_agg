@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_trips
+    description: Staging model for NYC Yellow Taxi trips from parquet files
+    columns:
+      - name: trip_id
+        tests: [not_null, unique]
+      - name: trip_ts
+        tests: [not_null]
+      - name: trip_date
+        tests: [not_null]
+      - name: vendor_id
+        tests: [not_null]
+      - name: total_amount
+        tests: [not_null]
+      - name: fare_amount
+      - name: tip_amount
+      - name: tolls_amount
+      - name: passenger_count
+      - name: trip_distance
+
+  - name: agg_daily_revenue
+    description: Incremental daily revenue with running total, handles late-arriving events
+    columns:
+      - name: trip_date
+        tests: [not_null]
+      - name: daily_revenue
+        tests: [not_null]
+      - name: daily_trips
+        tests: [not_null]
+      - name: daily_passengers
+      - name: running_revenue
+        tests: [not_null]
