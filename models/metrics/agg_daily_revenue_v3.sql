@@ -30,8 +30,7 @@ base AS (
     SELECT
         trip_date,
         SUM(total_amount) AS daily_revenue,
-        COUNT(*) AS daily_trips,
-        SUM(passenger_count) AS daily_passengers
+        COUNT(*) AS daily_trips
     FROM {{ ref('stg_trips') }}
     {% if is_incremental() %}
     WHERE trip_date >= (SELECT reprocess_from FROM params)
@@ -46,8 +45,7 @@ existing AS (
     {% else %}
     SELECT CAST(NULL AS DATE) AS trip_date, 
            CAST(NULL AS DOUBLE) AS daily_revenue,
-           CAST(NULL AS BIGINT) AS daily_trips,
-           CAST(NULL AS BIGINT) AS daily_passengers
+           CAST(NULL AS BIGINT) AS daily_trips
     WHERE FALSE
     {% endif %}
 ),
@@ -60,7 +58,6 @@ SELECT
     trip_date,
     daily_revenue,
     daily_trips,
-    daily_passengers,
     SUM(daily_revenue) OVER (
         ORDER BY trip_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue

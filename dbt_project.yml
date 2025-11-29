@@ -12,11 +12,15 @@ snapshot-paths: ["snapshots"]
 models:
   pycon25_spark_demo:
     +materialized: view
+    +post-hook:
+      - "{{ log_processed_data(this) }}"
     staging:
       +materialized: view
     metrics:
       +materialized: incremental
       +on_schema_change: append_new_columns
+      +post-hook:
+        - "{{ log_processed_data(this) }}"
 
 vars:
   reprocess_window_days: 14

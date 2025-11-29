@@ -203,7 +203,7 @@ make setup
 # Start Spark cluster and SQLPad
 make sqlpad-up
 
-# Download NYC taxi data (default: 2022-2023, ~2GB)
+# Download NYC taxi data (default: 2024, ~1GB)
 make download-data
 
 # Build models

@@ -16,7 +16,6 @@ SELECT
     trip_date,
     SUM(total_amount) AS daily_revenue,
     COUNT(*) AS daily_trips,
-    SUM(passenger_count) AS daily_passengers,
     SUM(SUM(total_amount)) OVER (
         ORDER BY trip_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue

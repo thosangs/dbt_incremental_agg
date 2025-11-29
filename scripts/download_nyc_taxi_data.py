@@ -106,7 +106,7 @@ async def main():
         epilog=__doc__,
     )
     parser.add_argument(
-        "--start-year", type=int, default=2022, help="Start year (default: 2022)"
+        "--start-year", type=int, default=2024, help="Start year (default: 2024)"
     )
     parser.add_argument(
         "--start-month",
@@ -117,7 +117,7 @@ async def main():
         help="Start month 1-12 (default: 1)",
     )
     parser.add_argument(
-        "--end-year", type=int, default=2023, help="End year (default: 2023)"
+        "--end-year", type=int, default=2024, help="End year (default: 2024)"
     )
     parser.add_argument(
         "--end-month",
