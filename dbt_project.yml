@@ -5,7 +5,6 @@ config-version: 2
 profile: pycon25_spark
 
 model-paths: ["models"]
-seed-paths: ["seeds"]
 test-paths: ["tests"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
@@ -18,10 +17,6 @@ models:
     metrics:
       +materialized: incremental
       +on_schema_change: append_new_columns
-
-seeds:
-  +schema: raw
-  +quote_columns: false
 
 vars:
   reprocess_window_days: 14

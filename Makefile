@@ -1,4 +1,4 @@
-DBT := docker compose exec -T dbt dbt --profiles-dir profiles
+DBT := docker compose exec -T dbt dbt --profile pycon25_spark
 PY := docker compose exec -T dbt python
 
 .PHONY: help build setup seed run test clean spark-up spark-down spark-logs sqlpad-up sqlpad-down sqlpad-logs demo-late-data demo-01 demo-02 demo-03 dbt-shell

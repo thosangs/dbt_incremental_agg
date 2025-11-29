@@ -22,12 +22,13 @@ Example:
 """
 
 import argparse
+import asyncio
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import urlretrieve
+
+import aiohttp
 
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 DATA_TYPE = "yellow"  # yellow, green, fhv, fhvhv
@@ -61,32 +62,44 @@ def get_url(data_type, year, month):
     return f"{BASE_URL}/{filename}"
 
 
-def download_file(url, output_path, year, month):
-    """Download a single file with progress indication."""
+async def download_file(session, semaphore, url, output_path, year, month):
+    """Download a single file asynchronously with progress indication."""
     filename = os.path.basename(output_path)
-    print(f"Downloading {filename}...", end=" ", flush=True)
 
-    try:
-        urlretrieve(url, output_path)
-        file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
-        print(f"✓ ({file_size:.1f} MB)")
-        return True
-    except HTTPError as e:
-        if e.code == 404:
-            print("✗ Not found (404)")
+    async with semaphore:  # Limit concurrent downloads
+        print(f"Downloading {filename}...", end=" ", flush=True)
+
+        try:
+            async with session.get(url) as response:
+                if response.status == 404:
+                    print("✗ Not found (404)")
+                    return False
+
+                if response.status != 200:
+                    print(f"✗ HTTP Error {response.status}")
+                    return False
+
+                # Write file in chunks
+                with open(output_path, "wb") as f:
+                    async for chunk in response.content.iter_chunked(8192):
+                        f.write(chunk)
+
+                file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                print(f"✓ ({file_size:.1f} MB)")
+                return True
+
+        except asyncio.TimeoutError:
+            print("✗ Timeout")
             return False
-        else:
-            print(f"✗ HTTP Error {e.code}")
+        except aiohttp.ClientError as e:
+            print(f"✗ Network Error: {e}")
             return False
-    except URLError as e:
-        print(f"✗ Network Error: {e.reason}")
-        return False
-    except Exception as e:
-        print(f"✗ Error: {e}")
-        return False
+        except Exception as e:
+            print(f"✗ Error: {e}")
+            return False
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(
         description="Download NYC Taxi Trip Data in Parquet format",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -123,6 +136,12 @@ def main():
     parser.add_argument(
         "--skip-existing", action="store_true", help="Skip files that already exist"
     )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        help="Number of concurrent downloads (default: 4)",
+    )
 
     args = parser.parse_args()
 
@@ -152,28 +171,37 @@ def main():
         f"Date range: {args.start_year}-{args.start_month:02d} to {args.end_year}-{args.end_month:02d}"
     )
     print(f"Output directory: {output_dir}")
+    print(f"Concurrent downloads: {args.concurrency}")
     print(f"Total files to download: {len(dates)}\n")
 
-    # Download files
-    downloaded = 0
+    # Prepare download tasks
+    semaphore = asyncio.Semaphore(args.concurrency)
+    tasks = []
     skipped = 0
-    failed = 0
 
-    for year, month in dates:
-        filename = get_filename(DATA_TYPE, year, month)
-        output_path = output_dir / filename
+    # Set timeout for downloads (5 minutes per file)
+    timeout = aiohttp.ClientTimeout(total=300)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for year, month in dates:
+            filename = get_filename(DATA_TYPE, year, month)
+            output_path = output_dir / filename
 
-        # Skip if exists
-        if args.skip_existing and output_path.exists():
-            print(f"Skipping {filename} (already exists)")
-            skipped += 1
-            continue
+            # Skip if exists
+            if args.skip_existing and output_path.exists():
+                print(f"Skipping {filename} (already exists)")
+                skipped += 1
+                continue
 
-        url = get_url(DATA_TYPE, year, month)
-        if download_file(url, output_path, year, month):
-            downloaded += 1
-        else:
-            failed += 1
+            url = get_url(DATA_TYPE, year, month)
+            task = download_file(session, semaphore, url, output_path, year, month)
+            tasks.append(task)
+
+        # Execute all downloads concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Count results
+    downloaded = sum(1 for r in results if r is True)
+    failed = sum(1 for r in results if r is False or isinstance(r, Exception))
 
     # Summary
     print("\n" + "=" * 60)
@@ -193,4 +221,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(asyncio.run(main()))
