@@ -1,13 +1,17 @@
 {{
   config(
-    materialized='view'
+    materialized='incremental',
+    unique_key='trip_id',
+    on_schema_change='append_new_columns'
   )
 }}
 
--- Staging model for NYC Yellow Taxi trips
--- Reads from parquet files in data/raw/ directory
--- This is a view (always fresh) since incremental logic is handled
--- at the aggregation level in agg_daily_revenue.
+-- Version 2: Incremental Event Processing
+-- This staging model processes trips incrementally, only inserting new trips
+-- that haven't been seen before (based on trip_id).
+-- 
+-- Use case: Event streams where new events arrive continuously,
+-- and you want to avoid reprocessing existing events.
 
 WITH raw_trips AS (
     SELECT *
@@ -24,11 +28,7 @@ source AS (
         tip_amount,
         tolls_amount,
         passenger_count,
-        trip_distance,
-        PULocationID,
-        DOLocationID,
-        payment_type,
-        RatecodeID
+        trip_distance
     FROM raw_trips
     WHERE tpep_pickup_datetime IS NOT NULL
       AND total_amount IS NOT NULL
@@ -40,36 +40,18 @@ casted AS (
         ROW_NUMBER() OVER (ORDER BY tpep_pickup_datetime, VendorID) AS trip_id,
         CAST(tpep_pickup_datetime AS TIMESTAMP) AS trip_ts,
         CAST(tpep_dropoff_datetime AS TIMESTAMP) AS dropoff_ts,
+        CAST(DATE_TRUNC('day', tpep_pickup_datetime) AS DATE) AS trip_date,
         CAST(VendorID AS INT) AS vendor_id,
         CAST(total_amount AS DOUBLE) AS total_amount,
         CAST(fare_amount AS DOUBLE) AS fare_amount,
         CAST(tip_amount AS DOUBLE) AS tip_amount,
         CAST(tolls_amount AS DOUBLE) AS tolls_amount,
         CAST(passenger_count AS INT) AS passenger_count,
-        CAST(trip_distance AS DOUBLE) AS trip_distance,
-        CAST(PULocationID AS INT) AS pickup_location_id,
-        CAST(DOLocationID AS INT) AS dropoff_location_id,
-        CAST(payment_type AS INT) AS payment_type,
-        CAST(RatecodeID AS INT) AS rate_code_id
+        CAST(trip_distance AS DOUBLE) AS trip_distance
     FROM source
-),
-final AS (
-    SELECT
-        trip_id,
-        trip_ts,
-        dropoff_ts,
-        CAST(DATE_TRUNC('day', trip_ts) AS DATE) AS trip_date,
-        vendor_id,
-        total_amount,
-        fare_amount,
-        tip_amount,
-        tolls_amount,
-        passenger_count,
-        trip_distance,
-        pickup_location_id,
-        dropoff_location_id,
-        payment_type,
-        rate_code_id
-    FROM casted
 )
-SELECT * FROM final
+SELECT * FROM casted
+{% if is_incremental() %}
+WHERE trip_id NOT IN (SELECT trip_id FROM {{ this }})
+{% endif %}
+

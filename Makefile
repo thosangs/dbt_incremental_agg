@@ -16,6 +16,7 @@ build: ## Build container images
 setup: build ## Build images and prepare runtime dirs
 	@echo "[setup] Creating runtime dirs"
 	@mkdir -p data/warehouse data/raw
+	@chmod -R 777 data/warehouse data/raw || true
 
 download-data: ## Download NYC taxi data (default: 2022-2023)
 	@echo "[download] Downloading NYC Yellow Taxi data"
@@ -76,26 +77,17 @@ demo-late-data: ## Download additional older data to simulate late-arriving trip
 	$(PY) scripts/download_nyc_taxi_data.py --start-year 2021 --start-month 1 --end-year 2021 --end-month 3 --output-dir /data/raw --skip-existing
 	@echo "[demo] Late-arriving data downloaded. Re-run 'make run' to process."
 
-demo-01: ## Run Demo 01: Full Batch Processing
-	@echo "[demo-01] Setting up full batch models"
-	@cp demos/01_full_batch/models/stg_trips.sql models/staging/stg_trips.sql
-	@cp demos/01_full_batch/models/agg_daily_revenue.sql models/metrics/agg_daily_revenue.sql
-	@echo "[demo-01] Running full batch models"
-	$(DBT) run --select stg_trips agg_daily_revenue
-	@echo "[demo-01] Demo complete! Check SQLPad at http://localhost:3000"
+demo-01: ## Run Demo v1: Full Batch Processing
+	@echo "[demo-v1] Running full batch models"
+	$(DBT) run --select stg_trips agg_daily_revenue_v1
+	@echo "[demo-v1] Demo complete! Check SQLPad at http://localhost:3000"
 
-demo-02: ## Run Demo 02: Incremental Event Processing
-	@echo "[demo-02] Setting up incremental event models"
-	@cp demos/02_incremental_events/models/stg_trips.sql models/staging/stg_trips.sql
-	@cp demos/02_incremental_events/models/agg_daily_revenue.sql models/metrics/agg_daily_revenue.sql
-	@echo "[demo-02] Running incremental event models"
-	$(DBT) run --select stg_trips agg_daily_revenue
-	@echo "[demo-02] Demo complete! Check SQLPad at http://localhost:3000"
+demo-02: ## Run Demo v2: Incremental Event Processing
+	@echo "[demo-v2] Running incremental event models"
+	$(DBT) run --select stg_trips_v2 agg_daily_revenue_v2
+	@echo "[demo-v2] Demo complete! Check SQLPad at http://localhost:3000"
 
-demo-03: ## Run Demo 03: Incremental Aggregation with Partition Overwrite
-	@echo "[demo-03] Setting up incremental aggregation models"
-	@cp demos/03_incremental_aggregation/models/stg_trips.sql models/staging/stg_trips.sql
-	@cp demos/03_incremental_aggregation/models/agg_daily_revenue.sql models/metrics/agg_daily_revenue.sql
-	@echo "[demo-03] Running incremental aggregation models"
-	$(DBT) run --select stg_trips agg_daily_revenue
-	@echo "[demo-03] Demo complete! Check SQLPad at http://localhost:3000"
+demo-03: ## Run Demo v3: Incremental Aggregation with Partition Overwrite
+	@echo "[demo-v3] Running incremental aggregation models"
+	$(DBT) run --select stg_trips agg_daily_revenue_v3
+	@echo "[demo-v3] Demo complete! Check SQLPad at http://localhost:3000"

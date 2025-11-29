@@ -59,6 +59,8 @@ services:
       - SPARK_SQL_WAREHOUSE_DIR=/data/warehouse
     command: >
       /bin/bash -c "
+      mkdir -p /data/warehouse &&
+      chmod -R 777 /data/warehouse 2>/dev/null || true &&
       /opt/spark/sbin/start-thriftserver.sh
       --master spark://spark-master:7077
       --conf spark.sql.warehouse.dir=/data/warehouse &&

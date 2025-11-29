@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: stg_trips
-    description: Staging model for NYC Yellow Taxi trips from parquet files
+    description: Staging model for NYC Yellow Taxi trips from parquet files (view - always fresh)
     columns:
       - name: trip_id
         tests: [not_null, unique]
@@ -20,8 +20,53 @@ models:
       - name: passenger_count
       - name: trip_distance
 
-  - name: agg_daily_revenue
-    description: Incremental daily revenue with running total, handles late-arriving events
+  - name: stg_trips_v2
+    description: Incremental staging model for NYC Yellow Taxi trips (v2 - incremental events)
+    columns:
+      - name: trip_id
+        tests: [not_null, unique]
+      - name: trip_ts
+        tests: [not_null]
+      - name: trip_date
+        tests: [not_null]
+      - name: vendor_id
+        tests: [not_null]
+      - name: total_amount
+        tests: [not_null]
+      - name: fare_amount
+      - name: tip_amount
+      - name: tolls_amount
+      - name: passenger_count
+      - name: trip_distance
+
+  - name: agg_daily_revenue_v1
+    description: Version 1 - Full batch daily revenue aggregation (table refresh)
+    columns:
+      - name: trip_date
+        tests: [not_null]
+      - name: daily_revenue
+        tests: [not_null]
+      - name: daily_trips
+        tests: [not_null]
+      - name: daily_passengers
+      - name: running_revenue
+        tests: [not_null]
+
+  - name: agg_daily_revenue_v2
+    description: Version 2 - Incremental event processing (incremental staging, full aggregation)
+    columns:
+      - name: trip_date
+        tests: [not_null]
+      - name: daily_revenue
+        tests: [not_null]
+      - name: daily_trips
+        tests: [not_null]
+      - name: daily_passengers
+      - name: running_revenue
+        tests: [not_null]
+
+  - name: agg_daily_revenue_v3
+    description: Version 3 - Incremental aggregation with partition overwrite (recommended)
     columns:
       - name: trip_date
         tests: [not_null]

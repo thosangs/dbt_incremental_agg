@@ -21,16 +21,19 @@ The repo is optimized for live demos: everything runs locally in Docker, require
 ### The Journey: Three Progressive Demos
 
 #### Demo 01: Full Batch Processing
+
 **Pattern**: Full table refresh on every run  
 **Use case**: Small datasets, infrequent updates  
 **Trade-off**: Simple but inefficient for large datasets
 
 #### Demo 02: Incremental Event Processing
+
 **Pattern**: Incremental event ingestion with full aggregation refresh  
 **Use case**: Event streams with continuous new data  
 **Trade-off**: Efficient event processing but doesn't handle late-arriving events well
 
 #### Demo 03: Incremental Aggregation with Partition Overwrite
+
 **Pattern**: Incremental aggregation using Spark's `insert_overwrite` strategy  
 **Use case**: Time-series aggregations with late-arriving events  
 **Trade-off**: Most sophisticated, handles late data correctly, leverages Spark's partition overwrite
@@ -70,6 +73,7 @@ make sqlpad-up
 ```
 
 This starts:
+
 - Spark master (port 8080 for web UI)
 - Spark worker
 - Spark Thrift server (port 10000 for JDBC)
@@ -107,15 +111,15 @@ make demo-03
 - Query your models:
   ```sql
   SELECT * FROM analytics.stg_trips LIMIT 100;
-  SELECT * FROM analytics.agg_daily_revenue ORDER BY trip_date;
-  SELECT trip_date, daily_revenue, daily_trips FROM analytics.agg_daily_revenue ORDER BY trip_date DESC LIMIT 30;
+  SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date;
+  SELECT trip_date, daily_revenue, daily_trips FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
   ```
 
 ---
 
 ### Demo workflow: The Journey
 
-#### Step 1: Start with Full Batch (Demo 01)
+#### Step 1: Start with Full Batch (Version 1)
 
 ```bash
 make demo-01
@@ -123,7 +127,7 @@ make demo-01
 
 **What happens**: Every run rebuilds tables from scratch. Simple but inefficient.
 
-#### Step 2: Move to Incremental Events (Demo 02)
+#### Step 2: Move to Incremental Events (Version 2)
 
 ```bash
 make demo-02
@@ -131,7 +135,7 @@ make demo-02
 
 **What happens**: Only new events are processed incrementally. More efficient, but late-arriving events are missed.
 
-#### Step 3: Advanced Incremental Aggregation (Demo 03)
+#### Step 3: Advanced Incremental Aggregation (Version 3)
 
 ```bash
 # First run - downloads and processes 2022-2023 data
@@ -163,25 +167,12 @@ make run
 │   ├── schema.yml                # Model documentation and tests
 │   ├── sources.yml               # Source definitions for parquet files
 │   ├── staging/
-│   │   └── stg_trips.sql        # Current staging model (updated by demos)
+│   │   ├── stg_trips.sql        # Staging model (view - used by v1 & v3)
+│   │   └── stg_trips_v2.sql     # Incremental staging (used by v2)
 │   └── metrics/
-│       └── agg_daily_revenue.sql # Current aggregation model (updated by demos)
-├── demos/
-│   ├── 01_full_batch/            # Demo 01: Full batch processing
-│   │   ├── models/
-│   │   │   ├── stg_trips.sql
-│   │   │   └── agg_daily_revenue.sql
-│   │   └── README.md
-│   ├── 02_incremental_events/    # Demo 02: Incremental event processing
-│   │   ├── models/
-│   │   │   ├── stg_trips.sql
-│   │   │   └── agg_daily_revenue.sql
-│   │   └── README.md
-│   └── 03_incremental_aggregation/ # Demo 03: Incremental aggregation
-│       ├── models/
-│       │   ├── stg_trips.sql
-│       │   └── agg_daily_revenue.sql
-│       └── README.md
+│       ├── agg_daily_revenue_v1.sql # Version 1: Full batch
+│       ├── agg_daily_revenue_v2.sql # Version 2: Incremental events
+│       └── agg_daily_revenue_v3.sql # Version 3: Incremental aggregation (recommended)
 ├── scripts/
 │   └── download_nyc_taxi_data.py # Script to download NYC taxi parquet files
 ├── data/                         # Created at runtime
@@ -199,7 +190,7 @@ make run
 - **Storage**: Parquet files in `data/warehouse/` directory
 - **Schema**: `analytics` (default)
 - **Connection**: JDBC via Spark Thrift server (`spark-thrift:10000`)
-- **Incremental Strategy**: `insert_overwrite` with partition overwrite (Demo 03)
+- **Incremental Strategy**: `insert_overwrite` with partition overwrite (Version 3)
 
 ---
 
@@ -218,10 +209,10 @@ make download-data
 # Build models
 make run
 
-# Run specific demo
-make demo-01  # Full batch
-make demo-02  # Incremental events
-make demo-03  # Incremental aggregation
+# Run specific demo version
+make demo-01  # Version 1: Full batch (stg_trips + agg_daily_revenue_v1)
+make demo-02  # Version 2: Incremental events (stg_trips_v2 + agg_daily_revenue_v2)
+make demo-03  # Version 3: Incremental aggregation (stg_trips + agg_daily_revenue_v3)
 
 # Simulate late-arriving data and re-run
 make demo-late-data  # Downloads older months (2021 Q1)
@@ -231,7 +222,7 @@ make run
 make test
 
 # Run specific model
-docker compose exec -T dbt dbt --profiles-dir profiles run --select metrics.agg_daily_revenue
+docker compose exec -T dbt dbt --profiles-dir profiles run --select metrics.agg_daily_revenue_v3
 
 # View logs
 make spark-logs
@@ -260,16 +251,20 @@ This project leverages Spark's capabilities:
 
 ### Notes for the live demo
 
-1. **Start with Demo 01** to show the simplest approach
-2. **Progress to Demo 02** to introduce incremental concepts
-3. **Finish with Demo 03** to showcase Spark's partition overwrite capabilities
-4. **Use `make demo-late-data`** to download older months and show how Demo 03 handles late-arriving trips correctly
-5. **Query in SQLPad** to visualize results and demonstrate the SQL interface
+1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing
+2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts
+3. **Finish with Version 3** (`make demo-03`) to showcase Spark's partition overwrite capabilities
+4. **Use `make demo-late-data`** to download older months and show how Version 3 handles late-arriving trips correctly
+5. **Query in SQLPad** to visualize results and demonstrate the SQL interface:
+   ```sql
+   SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
+   ```
 6. **Emphasize**:
    - How `is_incremental()` limits work to changed partitions
    - Spark's `insert_overwrite` strategy vs. simpler incremental approaches
    - The trade-offs between simplicity and efficiency
    - Real-world NYC taxi data demonstrates natural late-arriving patterns (data published ~2 months after collection)
+   - All versions are available side-by-side for easy comparison
 
 ---
 
