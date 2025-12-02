@@ -1,22 +1,38 @@
 {{
   config(
     materialized='incremental',
-    unique_key='trip_id',
+    file_format='parquet',
+    partition_by=['trip_date'],
+    incremental_strategy='insert_overwrite',
     on_schema_change='append_new_columns'
   )
 }}
 
 -- Version 2: Incremental Event Processing
--- This staging model processes trips incrementally, only inserting new trips
--- that haven't been seen before (based on trip_id).
+-- This staging model processes trips incrementally using a rolling window.
+-- On incremental runs, it reprocesses the last 7 days to catch late-arriving events.
+-- Uses insert_overwrite strategy to efficiently update only affected partitions.
 -- 
 -- Use case: Event streams where new events arrive continuously,
--- and you want to avoid reprocessing existing events.
+-- and you want to reprocess recent data to handle late-arriving events.
 
-WITH raw_trips AS (
+WITH params AS (
+    {% if is_incremental() %}
+    SELECT (
+        COALESCE((SELECT MAX(trip_date) FROM {{ this }}), DATE '1900-01-01')
+        - INTERVAL 7 DAYS
+    ) AS reprocess_from
+    {% else %}
+    SELECT DATE '1900-01-01' AS reprocess_from
+    {% endif %}
+),
+raw_trips AS (
     SELECT *
-    FROM parquet.`/data/partitioned`
+    FROM {{ ref('partition_trips_v1') }}
     -- trip_date is already a partition column, so we can filter efficiently
+    {% if is_incremental() %}
+    WHERE trip_date >= (SELECT reprocess_from FROM params)
+    {% endif %}
 ),
 source AS (
     SELECT
@@ -38,10 +54,9 @@ source AS (
       AND total_amount > 0
       AND trip_date IS NOT NULL
 ),
+
 casted AS (
     SELECT
-        -- Generate a unique trip_id from row number
-        ROW_NUMBER() OVER (ORDER BY tpep_pickup_datetime, VendorID) AS trip_id,
         CAST(tpep_pickup_datetime AS TIMESTAMP) AS trip_ts,
         CAST(tpep_dropoff_datetime AS TIMESTAMP) AS dropoff_ts,
         CAST(trip_date AS DATE) AS trip_date,
@@ -55,7 +70,4 @@ casted AS (
     FROM source
 )
 SELECT * FROM casted
-{% if is_incremental() %}
-WHERE trip_id NOT IN (SELECT trip_id FROM {{ this }})
-{% endif %}
 

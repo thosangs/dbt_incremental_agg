@@ -4,3 +4,4 @@ pyhive==0.7.0
 thrift==0.16.0
 pure-sasl==0.6.2
 aiohttp==3.9.1
+holidays==0.34

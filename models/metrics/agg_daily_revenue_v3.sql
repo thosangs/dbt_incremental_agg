@@ -1,8 +1,9 @@
 {{
   config(
     materialized='incremental',
-    incremental_strategy='insert_overwrite',
+    file_format='parquet',
     partition_by=['trip_date'],
+    incremental_strategy='insert_overwrite',
     on_schema_change='append_new_columns'
   )
 }}
@@ -20,44 +21,45 @@
 -- Use case: Aggregations where late-arriving events need to be handled,
 -- and you want to balance freshness with compute efficiency.
 
-WITH params AS (
+WITH
+{% if is_incremental() %}
+params AS (
     SELECT (
         COALESCE((SELECT MAX(trip_date) FROM {{ this }}), DATE '1900-01-01')
         - INTERVAL {{ var('reprocess_window_days', 14) }} DAYS
     ) AS reprocess_from
 ),
+{% endif %}
+
 base AS (
     SELECT
         trip_date,
         SUM(total_amount) AS daily_revenue,
-        COUNT(*) AS daily_trips
-    FROM {{ ref('stg_trips') }}
+        COUNT(*) AS daily_trips,
+        SUM(passenger_count) AS daily_passengers
+    FROM {{ ref('stg_trips_v2') }}
     {% if is_incremental() %}
     WHERE trip_date >= (SELECT reprocess_from FROM params)
     {% endif %}
     GROUP BY 1
 ),
-existing AS (
+
+unioned AS (
+    SELECT trip_date, daily_revenue, daily_trips, daily_passengers FROM base
+
     {% if is_incremental() %}
+    UNION ALL
+
     SELECT trip_date, daily_revenue, daily_trips, daily_passengers
     FROM {{ this }}
     WHERE trip_date < (SELECT reprocess_from FROM params)
-    {% else %}
-    SELECT CAST(NULL AS DATE) AS trip_date, 
-           CAST(NULL AS DOUBLE) AS daily_revenue,
-           CAST(NULL AS BIGINT) AS daily_trips
-    WHERE FALSE
     {% endif %}
-),
-unioned AS (
-    SELECT * FROM existing
-    UNION ALL
-    SELECT * FROM base
 )
 SELECT
     trip_date,
     daily_revenue,
     daily_trips,
+    daily_passengers,
     SUM(daily_revenue) OVER (
         ORDER BY trip_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue

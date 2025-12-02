@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: stg_trips
+  - name: stg_trips_v1
     description: Staging model for NYC Yellow Taxi trips from parquet files (view - always fresh)
     columns:
       - name: trip_id
@@ -38,6 +38,22 @@ models:
       - name: tolls_amount
       - name: passenger_count
       - name: trip_distance
+
+  - name: partition_trips_v1
+    description: |
+      Partitions monthly Parquet files from /data/raw into daily-partitioned Parquet files in /data/partitioned.
+      Available in both SQL and Python versions - both do exactly the same thing.
+      Reads monthly files, extracts trip_date from tpep_pickup_datetime, and writes partitioned by day.
+    columns:
+      - name: tpep_pickup_datetime
+        tests: [not_null]
+      - name: tpep_dropoff_datetime
+      - name: VendorID
+      - name: total_amount
+        tests: [not_null]
+      - name: trip_date
+        tests: [not_null]
+        description: Partition column - extracted from tpep_pickup_datetime
 
   - name: agg_daily_revenue_v1
     description: Version 1 - Full batch daily revenue aggregation (table refresh)

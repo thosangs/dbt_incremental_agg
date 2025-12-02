@@ -20,14 +20,15 @@ def model(dbt, session):
         incremental_strategy="insert_overwrite",
         partition_by=["trip_date"],
         on_schema_change="append_new_columns",
-        packages=["holidays"],  # Install holidays package on Spark cluster
+        # Note: packages not supported with Thrift method on standalone Spark
+        # holidays package must be installed in the dbt container
     )
 
     # Import holidays after package installation
     from holidays import US
 
     # Reference upstream SQL model
-    trips_df = dbt.ref("stg_trips")
+    trips_df = dbt.ref("stg_trips_v1")
 
     # Create US holidays dictionary for a reasonable date range
     # NYC taxi data typically spans 2020-2025, so we'll cover that range

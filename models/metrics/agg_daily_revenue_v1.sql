@@ -20,7 +20,7 @@ SELECT
     SUM(SUM(total_amount)) OVER (
         ORDER BY trip_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue
-FROM {{ ref('stg_trips') }}
+FROM {{ ref('stg_trips_v1') }}
 GROUP BY trip_date
 ORDER BY trip_date
 

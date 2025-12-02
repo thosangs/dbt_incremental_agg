@@ -1,7 +1,7 @@
 {{
-  config(
-    materialized='view'
-  )
+    config(
+        materialized='view'
+    )
 }}
 
 -- Staging model for NYC Yellow Taxi trips
@@ -12,7 +12,7 @@
 
 WITH raw_trips AS (
     SELECT *
-    FROM parquet.`/data/partitioned`
+    FROM {{ ref('partition_trips_v1') }}
     -- trip_date is already a partition column, so we can filter efficiently
 ),
 source AS (
