@@ -26,17 +26,29 @@ WITH params AS (
     {% endif %}
 ),
 raw_trips AS (
-    SELECT *
-    FROM {{ ref('partition_trips_v1') }}
-    -- trip_date is already a partition column, so we can filter efficiently
+    SELECT
+        tpep_pickup_datetime,
+        tpep_dropoff_datetime,
+        VendorID,
+        total_amount,
+        fare_amount,
+        tip_amount,
+        tolls_amount,
+        passenger_count,
+        trip_distance,
+        -- Extract trip_date from timestamp (partition columns year/month/date available for filtering)
+        DATE(tpep_pickup_datetime) AS trip_date
+    FROM {{ source('partitioned', 'yellow_trips') }}
+    WHERE tpep_pickup_datetime IS NOT NULL
+      AND total_amount IS NOT NULL
+      AND total_amount > 0
     {% if is_incremental() %}
-    WHERE trip_date >= (SELECT reprocess_from FROM params)
+      AND DATE(tpep_pickup_datetime) >= (SELECT reprocess_from FROM params)
     {% endif %}
 ),
 source AS (
     SELECT
         -- Read columns as-is first (INT32 from Parquet), then cast
-        -- trip_date is already a partition column in partitioned data
         tpep_pickup_datetime,
         tpep_dropoff_datetime,
         trip_date,
@@ -48,10 +60,7 @@ source AS (
         passenger_count,
         trip_distance
     FROM raw_trips
-    WHERE tpep_pickup_datetime IS NOT NULL
-      AND total_amount IS NOT NULL
-      AND total_amount > 0
-      AND trip_date IS NOT NULL
+    WHERE trip_date IS NOT NULL
 ),
 
 casted AS (

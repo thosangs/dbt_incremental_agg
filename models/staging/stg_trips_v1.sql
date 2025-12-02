@@ -5,20 +5,37 @@
 }}
 
 -- Staging model for NYC Yellow Taxi trips
--- Reads from partitioned Parquet files in data/partitioned/ directory
--- Data is partitioned by trip_date for efficient Spark operations
+-- Reads from Hive-partitioned Parquet files in /data/partitioned/ directory
+-- Data is partitioned by year=YYYY/month=MM/date=DD for efficient filtering
+-- DuckDB automatically discovers partitions and includes partition columns (year, month, date)
 -- This is a view (always fresh) since incremental logic is handled
 -- at the aggregation level in agg_daily_revenue.
 
 WITH raw_trips AS (
-    SELECT *
-    FROM {{ ref('partition_trips_v1') }}
-    -- trip_date is already a partition column, so we can filter efficiently
+    SELECT
+        tpep_pickup_datetime,
+        tpep_dropoff_datetime,
+        VendorID,
+        total_amount,
+        fare_amount,
+        tip_amount,
+        tolls_amount,
+        passenger_count,
+        trip_distance,
+        PULocationID,
+        DOLocationID,
+        payment_type,
+        RatecodeID,
+        -- Extract trip_date from timestamp (partition columns year/month/date available for filtering)
+        DATE(tpep_pickup_datetime) AS trip_date
+    FROM {{ source('partitioned', 'yellow_trips') }}
+    WHERE tpep_pickup_datetime IS NOT NULL
+      AND total_amount IS NOT NULL
+      AND total_amount > 0
 ),
 source AS (
     SELECT
         -- Read columns as-is first (INT32 from Parquet), then cast
-        -- trip_date is already a partition column in partitioned data
         tpep_pickup_datetime,
         tpep_dropoff_datetime,
         trip_date,
@@ -34,10 +51,7 @@ source AS (
         payment_type,
         RatecodeID
     FROM raw_trips
-    WHERE tpep_pickup_datetime IS NOT NULL
-      AND total_amount IS NOT NULL
-      AND total_amount > 0
-      AND trip_date IS NOT NULL
+    WHERE trip_date IS NOT NULL
 ),
 casted AS (
     SELECT

@@ -48,21 +48,9 @@ dbt-shell: ## Open a shell into the dbt container
 	@echo "[dbt] Opening shell"
 	docker compose exec dbt bash
 
-partition-data: ## Partition raw Parquet files by trip_date using dbt model (defaults to SQL version)
-	@echo "[partition] Partitioning data by trip_date using dbt model"
-	$(DBT) run --select partition_trips_v1
-
-partition-data-sql: ## Partition raw Parquet files using SQL dbt model
-	@echo "[partition] Partitioning data using SQL model"
-	$(DBT) run --select partition_trips_v1
-
-partition-data-python: ## Partition raw Parquet files using Python dbt model
-	@echo "[partition] Partitioning data using Python model"
-	$(DBT) run --select partition_trips_v2
-
 demo-01: ## Run Demo v1: Full Batch Processing
 	@echo "[demo-v1] Running full batch models"
-	$(DBT) run --select stg_trips agg_daily_revenue_v1
+	$(DBT) run --select stg_trips_v1 agg_daily_revenue_v1
 	@echo "[demo-v1] Demo complete!"
 
 demo-02: ## Run Demo v2: Incremental Event Processing
@@ -70,7 +58,7 @@ demo-02: ## Run Demo v2: Incremental Event Processing
 	$(DBT) run --select stg_trips_v2 agg_daily_revenue_v2
 	@echo "[demo-v2] Demo complete!"
 
-demo-03: ## Run Demo v3: Incremental Aggregation with Partition Overwrite
+demo-03: ## Run Demo v3: Incremental Aggregation with Sliding Window
 	@echo "[demo-v3] Running incremental aggregation models"
-	$(DBT) run --select stg_trips agg_daily_revenue_v3
+	$(DBT) run --select stg_trips_v1 agg_daily_revenue_v3
 	@echo "[demo-v3] Demo complete!"

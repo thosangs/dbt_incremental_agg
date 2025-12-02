@@ -99,10 +99,14 @@ async def download_file(session, semaphore, url, output_path, year, month):
             return False
 
 
-def repartition_with_duckdb(raw_dir, partitioned_dir, year, month):
+def repartition_with_duckdb(raw_dir, partitioned_dir, year, month, keep_monthly=False):
     """
-    Repartition monthly Parquet file into daily Parquet files using DuckDB.
-    Deletes the original monthly file after successful repartitioning.
+    Repartition monthly Parquet file into daily Parquet files using DuckDB's native PARTITION_BY.
+    Structure: partitioned/year=YYYY/month=MM/date=DD/file.parquet
+    Deletes the original monthly file after successful repartitioning (unless keep_monthly=True).
+
+    Uses DuckDB's native PARTITION_BY feature for Hive-style partitioning.
+    Reference: https://duckdb.org/docs/stable/data/partitioning/partitioned_writes
     """
     filename = get_filename(DATA_TYPE, year, month)
     raw_file = Path(raw_dir) / filename
@@ -117,79 +121,85 @@ def repartition_with_duckdb(raw_dir, partitioned_dir, year, month):
         # Connect to DuckDB (in-memory)
         conn = duckdb.connect()
 
-        # Create partitioned directory structure: partitioned/YYYY/MM/DD/*.parquet
-        partitioned_base = Path(partitioned_dir)
+        # Create partitioned base directory and ensure it exists
+        partitioned_base = Path(partitioned_dir).resolve()
         partitioned_base.mkdir(parents=True, exist_ok=True)
 
-        # Get distinct dates from the file
-        dates_query = f"""
-        SELECT DISTINCT DATE(tpep_pickup_datetime) AS trip_date
-        FROM read_parquet('{raw_file}')
-        WHERE tpep_pickup_datetime IS NOT NULL
-          AND DATE(tpep_pickup_datetime) IS NOT NULL
-        ORDER BY trip_date
-        """
-        dates_df = conn.execute(dates_query).df()
-
-        if dates_df.empty:
-            print("✗ No valid dates found")
+        # Convert paths to absolute strings for DuckDB (important for Docker mount points)
+        raw_file_abs = Path(raw_dir).resolve() / filename
+        if not raw_file_abs.exists():
+            print(f"✗ File not found: {raw_file_abs}")
             conn.close()
             return False
 
-        # Repartition by date - write each day to a separate file
-        files_written = 0
-        for _, row in dates_df.iterrows():
-            trip_date = row["trip_date"]
-            date_str = trip_date.strftime("%Y-%m-%d")
+        raw_file_str = str(raw_file_abs).replace("\\", "/")  # Normalize path separators
 
-            # Create directory structure: partitioned/YYYY/MM/DD/
-            date_dir = (
-                partitioned_base
-                / trip_date.strftime("%Y")
-                / trip_date.strftime("%m")
-                / trip_date.strftime("%d")
-            )
-            date_dir.mkdir(parents=True, exist_ok=True)
+        # Output path: DuckDB's PARTITION_BY will create year=YYYY/month=MM/date=DD/ subdirectories
+        # Use the partitioned_dir directly as the root (not a subdirectory per month file)
+        # This ensures all months write to the same partitioned structure
+        output_path_str = str(partitioned_base.resolve()).replace("\\", "/")
 
-            # Write daily partition
-            daily_file = date_dir / f"{DATA_TYPE}_tripdata_{date_str}.parquet"
-            daily_query = f"""
-            COPY (
-                SELECT
-                    tpep_pickup_datetime,
-                    tpep_dropoff_datetime,
-                    VendorID,
-                    total_amount,
-                    fare_amount,
-                    tip_amount,
-                    tolls_amount,
-                    passenger_count,
-                    trip_distance,
-                    PULocationID,
-                    DOLocationID,
-                    payment_type,
-                    RatecodeID,
-                    trip_date
-                FROM read_parquet('{raw_file}')
-                WHERE DATE(tpep_pickup_datetime) = DATE '{trip_date}'
-                  AND tpep_pickup_datetime IS NOT NULL
-                  AND total_amount IS NOT NULL
-                  AND total_amount > 0
-            ) TO '{daily_file}' (FORMAT PARQUET)
-            """
-            conn.execute(daily_query)
-            files_written += 1
+        # Use DuckDB's native PARTITION_BY for Hive-style partitioning
+        # This automatically creates: partitioned/year=YYYY/month=MM/date=DD/data_X.parquet
+        # Structure will be: /data/partitioned/year=2025/month=09/date=15/yellow_tripdata_0.parquet
+        partition_query = f"""
+        COPY (
+            SELECT
+                tpep_pickup_datetime,
+                tpep_dropoff_datetime,
+                VendorID,
+                total_amount,
+                fare_amount,
+                tip_amount,
+                tolls_amount,
+                passenger_count,
+                trip_distance,
+                PULocationID,
+                DOLocationID,
+                payment_type,
+                RatecodeID,
+                YEAR(DATE(tpep_pickup_datetime)) AS year,
+                MONTH(DATE(tpep_pickup_datetime)) AS month,
+                DAY(DATE(tpep_pickup_datetime)) AS date
+            FROM read_parquet('{raw_file_str}')
+            WHERE tpep_pickup_datetime IS NOT NULL
+              AND total_amount IS NOT NULL
+              AND total_amount > 0
+              AND DATE(tpep_pickup_datetime) IS NOT NULL
+        ) TO '{output_path_str}'
+        (
+            FORMAT PARQUET,
+            PARTITION_BY (year, month, date),
+            OVERWRITE_OR_IGNORE,
+            FILENAME_PATTERN '{DATA_TYPE}_tripdata_{{i}}'
+        )
+        """
+
+        conn.execute(partition_query)
+
+        # Count files written by checking the partitioned directory
+        files_written = len(list(partitioned_base.rglob("*.parquet")))
 
         conn.close()
 
-        # Delete original monthly file after successful repartitioning
-        raw_file.unlink()
-        print(f"✓ ({files_written} daily files, original deleted)")
+        # Delete original monthly file after successful repartitioning (unless keep_monthly)
+        if not keep_monthly:
+            raw_file.unlink()
+            print(
+                f"✓ (Hive-style partitioned using PARTITION_BY, {files_written} total files, original deleted)"
+            )
+        else:
+            print(
+                f"✓ (Hive-style partitioned using PARTITION_BY, {files_written} total files, original kept)"
+            )
 
         return True
 
     except Exception as e:
         print(f"✗ Error: {e}")
+        import traceback
+
+        traceback.print_exc()
         return False
 
 
@@ -339,7 +349,9 @@ async def main():
 
         # Only repartition if file exists (downloaded or skipped)
         if raw_file.exists():
-            success = repartition_with_duckdb(raw_dir, partitioned_dir, year, month)
+            success = repartition_with_duckdb(
+                raw_dir, partitioned_dir, year, month, args.keep_monthly
+            )
             if success:
                 repartitioned += 1
             else:

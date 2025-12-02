@@ -13,25 +13,27 @@
       {% endif %}
     {% endfor %}
     
-    {# For staging models - log row count #}
+    {# For staging models - log row count directly from Parquet files #}
     {% if 'stg_trips' in model_name %}
       {% set count_query %}
         SELECT COUNT(*) AS row_count
-        FROM {{ model }}
+        FROM read_parquet('/data/partitioned/**/*.parquet')
+        WHERE tpep_pickup_datetime IS NOT NULL
+          AND total_amount IS NOT NULL
+          AND total_amount > 0
       {% endset %}
       
       {% set results = run_query(count_query) %}
       {% if results and results.columns[0].values() %}
         {% set row_count = results.columns[0].values()[0] %}
-        {{ log("📊 Processed: " ~ row_count ~ " rows", info=True) }}
+        {{ log("📊 Processed: " ~ row_count ~ " rows from Parquet files", info=True) }}
       {% endif %}
     {% endif %}
     
     {# For aggregation models #}
     {% if 'agg_daily_revenue' in model_name %}
       {% if is_incremental %}
-        {# For incremental: try to get max date from the table (now exists after build) #}
-        {# If its the first run, max_date will be NULL and we process all #}
+        {# For incremental: get max date from the built model table #}
         {% set reprocess_query %}
           SELECT 
             COALESCE((SELECT MAX(trip_date) FROM {{ model }}), DATE '1900-01-01')
@@ -44,46 +46,55 @@
           
           {# Check if this is initial run (reprocess_from is very old) #}
           {% if reprocess_from < '2000-01-01' %}
-            {# Initial run - process all data #}
+            {# Initial run - count all rows from Parquet files #}
             {% set count_query %}
               SELECT COUNT(*) AS row_count
-              FROM {{ ref('stg_trips_v2') }}
+              FROM read_parquet('/data/partitioned/**/*.parquet')
+              WHERE tpep_pickup_datetime IS NOT NULL
+                AND total_amount IS NOT NULL
+                AND total_amount > 0
             {% endset %}
             
             {% set results = run_query(count_query) %}
             {% if results and results.columns[0].values() %}
               {% set row_count = results.columns[0].values()[0] %}
-              {{ log("📊 Processed: " ~ row_count ~ " rows (initial)", info=True) }}
+              {{ log("📊 Processed: " ~ row_count ~ " rows from Parquet files (initial)", info=True) }}
             {% endif %}
           {% else %}
-            {# Incremental run - calculate reprocess window #}
+            {# Incremental run - count rows in reprocess window from Parquet files #}
             {% set count_query %}
               SELECT 
                 COUNT(*) AS row_count,
-                COUNT(DISTINCT trip_date) AS day_count
-              FROM {{ ref('stg_trips_v2') }}
-              WHERE trip_date >= DATE '{{ reprocess_from }}'
+                COUNT(DISTINCT DATE(tpep_pickup_datetime)) AS day_count
+              FROM read_parquet('/data/partitioned/**/*.parquet')
+              WHERE tpep_pickup_datetime IS NOT NULL
+                AND total_amount IS NOT NULL
+                AND total_amount > 0
+                AND DATE(tpep_pickup_datetime) >= DATE '{{ reprocess_from }}'
             {% endset %}
             
             {% set results = run_query(count_query) %}
             {% if results and results.columns[0].values() %}
               {% set row_count = results.columns[0].values()[0] %}
               {% set day_count = results.columns[1].values()[0] %}
-              {{ log("📊 Processed: " ~ row_count ~ " rows (" ~ day_count ~ " days)", info=True) }}
+              {{ log("📊 Processed: " ~ row_count ~ " rows (" ~ day_count ~ " days) from Parquet files", info=True) }}
             {% endif %}
           {% endif %}
         {% endif %}
       {% else %}
-        {# Full refresh (v1, v2) - get row count #}
+        {# Full refresh (v1, v2) - count rows from Parquet files #}
         {% set count_query %}
           SELECT COUNT(*) AS row_count
-          FROM {{ ref('stg_trips_v2') }}
+          FROM read_parquet('/data/partitioned/**/*.parquet')
+          WHERE tpep_pickup_datetime IS NOT NULL
+            AND total_amount IS NOT NULL
+            AND total_amount > 0
         {% endset %}
         
         {% set results = run_query(count_query) %}
         {% if results and results.columns[0].values() %}
           {% set row_count = results.columns[0].values()[0] %}
-          {{ log("📊 Processed: " ~ row_count ~ " rows (full)", info=True) }}
+          {{ log("📊 Processed: " ~ row_count ~ " rows from Parquet files (full)", info=True) }}
         {% endif %}
       {% endif %}
     {% endif %}

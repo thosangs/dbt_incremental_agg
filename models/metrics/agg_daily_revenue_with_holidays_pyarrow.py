@@ -91,8 +91,9 @@ def model(dbt, session):
         Note: For aggregations, we collect all batches first, then aggregate.
         For transformations, we can process and yield batches directly.
         """
-        # Collect all batches for aggregation (since we need to aggregate by date)
-        all_batches = []
+        # Collect all DataFrames for aggregation (since we need to aggregate by date)
+        # Work with pandas DataFrames to avoid schema mismatches
+        all_dfs = []
         for batch in batch_reader:
             # Convert batch to pandas DataFrame
             df = batch.to_pandas()
@@ -102,14 +103,16 @@ def model(dbt, session):
             df["is_holiday"] = df["trip_date"].apply(is_holiday_pandas)
             df["holiday_name"] = df["trip_date"].apply(get_holiday_name_pandas)
 
-            # Convert back to RecordBatch and collect
-            enriched_batch = pa.RecordBatch.from_pandas(df)
-            all_batches.append(enriched_batch)
+            # Ensure holiday_name is object type (string) to handle None values consistently
+            df["holiday_name"] = df["holiday_name"].astype("object")
 
-        # If we have batches, combine and aggregate
-        if all_batches:
-            # Combine all batches into a single DataFrame for aggregation
-            combined_df = pa.Table.from_batches(all_batches).to_pandas()
+            # Collect DataFrame (not RecordBatch) to avoid schema issues
+            all_dfs.append(df)
+
+        # If we have DataFrames, combine and aggregate
+        if all_dfs:
+            # Combine all DataFrames into a single DataFrame for aggregation
+            combined_df = pd.concat(all_dfs, ignore_index=True)
 
             # Aggregate daily revenue (now we have all data)
             daily_agg = (
@@ -149,10 +152,28 @@ def model(dbt, session):
                     "daily_passengers",
                     "running_revenue",
                 ]
-            ]
+            ].copy()
 
-            # Yield as a single batch
-            yield pa.RecordBatch.from_pandas(final_df)
+            # Ensure consistent data types
+            final_df["holiday_name"] = final_df["holiday_name"].astype("object")
+
+            # Convert to RecordBatch with explicit schema to avoid mismatches
+            # Define schema explicitly to ensure consistency
+            schema = pa.schema(
+                [
+                    pa.field("trip_date", pa.date32()),
+                    pa.field("is_holiday", pa.bool_()),
+                    pa.field("holiday_name", pa.string()),  # Explicitly nullable string
+                    pa.field("daily_revenue", pa.float64()),
+                    pa.field("daily_trips", pa.int64()),
+                    pa.field("daily_passengers", pa.float64()),
+                    pa.field("running_revenue", pa.float64()),
+                ]
+            )
+
+            # Convert to RecordBatch with explicit schema
+            table = pa.Table.from_pandas(final_df, schema=schema)
+            yield table.to_batches()[0]
 
     # ============================================================================
     # Main processing logic using PyArrow batch processing
