@@ -1,6 +1,6 @@
-### Incremental Aggregations Journey: dbt + Spark + SQLPad (PyCon 2025 Talk Demo)
+### Incremental Aggregations Journey: dbt + Spark (PyCon 2025 Talk Demo)
 
-This project demonstrates a progressive journey through incremental data processing patterns using dbt, Apache Spark (with Parquet), and SQLPad. It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with partition overwrite.
+This project demonstrates a progressive journey through incremental data processing patterns using dbt and Apache Spark (with Parquet). It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with partition overwrite.
 
 The repo is optimized for live demos: everything runs locally in Docker, requires no external cloud credentials, and can be reset quickly.
 
@@ -13,7 +13,6 @@ The repo is optimized for live demos: everything runs locally in Docker, require
 - **NYC Yellow Taxi Trip Data** from the NYC Taxi & Limousine Commission (TLC) - real-world time-series data
 - **Data download script** to fetch parquet files from TLC's public data repository
 - **Spark Standalone cluster** with Thrift server for JDBC connectivity
-- **SQLPad** web UI for querying and visualizing results
 - **Docker Compose** orchestration for the entire stack
 
 ---
@@ -66,10 +65,10 @@ cd pycon25
 make setup
 ```
 
-3. **Start Spark cluster and SQLPad**
+3. **Start Spark cluster**
 
 ```bash
-make sqlpad-up
+make spark-up
 ```
 
 This starts:
@@ -77,7 +76,6 @@ This starts:
 - Spark master (port 8080 for web UI)
 - Spark worker
 - Spark Thrift server (port 10000 for JDBC)
-- SQLPad (port 3000 for web UI)
 - dbt container
 
 Wait a few seconds for Spark Thrift server to be ready.
@@ -98,22 +96,21 @@ make demo-02
 make demo-03
 ```
 
-5. **Explore in SQLPad**
+5. **Query your models**
 
-- Open SQLPad at `http://localhost:3000`
-- Login: `admin@example.com` / `changeme`
-- Add a new connection:
-  - **Name**: Spark
-  - **Driver**: SparkSQL
-  - **Host**: `spark-thrift`
-  - **Port**: `10000`
-  - **Database**: `analytics`
-- Query your models:
-  ```sql
-  SELECT * FROM analytics.stg_trips LIMIT 100;
-  SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date;
-  SELECT trip_date, daily_revenue, daily_trips FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
-  ```
+You can query your models using any SQL client that supports JDBC connections to Spark:
+
+- **Host**: `localhost`
+- **Port**: `10000`
+- **Database**: `analytics`
+
+Example queries:
+
+```sql
+SELECT * FROM analytics.stg_trips LIMIT 100;
+SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date;
+SELECT trip_date, daily_revenue, daily_trips FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
+```
 
 ---
 
@@ -158,8 +155,8 @@ make run
 ```text
 .
 ├── Dockerfile                    # Python container for dbt + Spark dependencies
-├── Makefile                      # Orchestrates dockerized dbt, Spark, and SQLPad
-├── docker-compose.yml            # Spark cluster + SQLPad + dbt services
+├── Makefile                      # Orchestrates dockerized dbt and Spark
+├── docker-compose.yml            # Spark cluster + dbt services
 ├── dbt_project.yml              # dbt project configuration
 ├── profiles/
 │   └── profiles.yml              # dbt profile for Spark connection
@@ -200,8 +197,8 @@ make run
 # Build images and prepare runtime dirs
 make setup
 
-# Start Spark cluster and SQLPad
-make sqlpad-up
+# Start Spark cluster
+make spark-up
 
 # Download NYC taxi data (default: 2024, ~1GB)
 make download-data
@@ -226,11 +223,9 @@ docker compose exec -T dbt dbt --profiles-dir profiles run --select metrics.agg_
 
 # View logs
 make spark-logs
-make sqlpad-logs
 
 # Stop services
 make spark-down
-make sqlpad-down
 
 # Clean build artifacts
 make clean
@@ -244,7 +239,7 @@ This project leverages Spark's capabilities:
 
 - **Partition Overwrite**: Unlike DuckDB, Spark supports efficient partition-level overwrites via `insert_overwrite` strategy
 - **Parquet Storage**: Columnar format for efficient analytics queries
-- **Thrift Server**: JDBC connectivity for SQLPad and other SQL clients
+- **Thrift Server**: JDBC connectivity for SQL clients
 - **Distributed Processing**: Spark Standalone cluster for parallel processing
 
 ---
@@ -255,7 +250,7 @@ This project leverages Spark's capabilities:
 2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts
 3. **Finish with Version 3** (`make demo-03`) to showcase Spark's partition overwrite capabilities
 4. **Use `make demo-late-data`** to download older months and show how Version 3 handles late-arriving trips correctly
-5. **Query in SQLPad** to visualize results and demonstrate the SQL interface:
+5. **Query results** using any SQL client that supports JDBC connections to Spark:
    ```sql
    SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
    ```
@@ -282,13 +277,12 @@ The data is published monthly with a ~2-month delay, making it ideal for demonst
 
 ### Troubleshooting
 
-- **Spark Thrift server not ready**: Wait 10-15 seconds after `make sqlpad-up` before running dbt commands
+- **Spark Thrift server not ready**: Wait 10-15 seconds after `make spark-up` before running dbt commands
 - **Connection errors**: Ensure Spark Thrift server is running (`make spark-logs` to check)
-- **SQLPad can't connect**: Verify Spark connection settings (host: `spark-thrift`, port: `10000`, database: `analytics`)
 - **Parquet files not found**: Run `make download-data` to download NYC taxi data
 - **Download fails**: Check internet connection. Files are ~50-100MB each. Ensure sufficient disk space (~2GB for default range)
 - **Memory issues**: Ensure Docker has at least 4GB RAM allocated (Spark needs memory)
-- **Port conflicts**: Ensure ports 3000 (SQLPad), 8080 (Spark UI), and 10000 (Thrift) are available
+- **Port conflicts**: Ensure ports 8080 (Spark UI) and 10000 (Thrift) are available
 
 ---
 
@@ -297,7 +291,7 @@ The data is published monthly with a ~2-month delay, making it ideal for demonst
 - **Partition Overwrite**: Spark's `insert_overwrite` strategy efficiently handles partition-level updates, which DuckDB doesn't support natively
 - **Scalability**: Spark is designed for distributed processing and larger datasets
 - **Production-ready**: Spark is commonly used in production data pipelines
-- **JDBC Support**: Better integration with SQL tools like SQLPad via Thrift server
+- **JDBC Support**: Better integration with SQL tools via Thrift server
 
 ---
 

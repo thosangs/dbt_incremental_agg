@@ -1,7 +1,7 @@
 DBT := docker compose exec -T dbt dbt --profile pycon25_spark
 PY := docker compose exec -T dbt python
 
-.PHONY: help build setup seed run test clean spark-up spark-down spark-logs sqlpad-up sqlpad-down sqlpad-logs demo-late-data demo-01 demo-02 demo-03 dbt-shell
+.PHONY: help build setup seed run test clean spark-up spark-down spark-logs demo-late-data demo-01 demo-02 demo-03 dbt-shell
 
 help: ## Show this help
 	@echo "Usage: make <target>"
@@ -23,10 +23,6 @@ download-data: ## Download NYC taxi data (default: 2022-2023) and partition by d
 	$(PY) scripts/download_nyc_taxi_data.py --output-dir /data/raw
 	@echo "[partition] Partitioning data by trip_date"
 	$(PY) scripts/partition_nyc_taxi_data.py --input-dir /data/raw --output-dir /data/partitioned --delete-source
-
-download-data-late: ## Download additional older data for late-arriving demo
-	@echo "[download] Downloading older NYC taxi data for late-arriving demo"
-	$(PY) scripts/download_nyc_taxi_data.py --start-year 2021 --start-month 1 --end-year 2021 --end-month 3 --output-dir /data/raw
 
 run: ## Run dbt models
 	@echo "[dbt] Running models"
@@ -60,20 +56,6 @@ spark-logs: ## Tail Spark Thrift server logs
 	@echo "[spark] Tailing Spark Thrift logs (Ctrl-C to stop)"
 	docker compose logs -f spark-thrift | cat
 
-sqlpad-up: spark-up ## Start SQLPad (depends on Spark)
-	@echo "[sqlpad] Starting SQLPad"
-	docker compose up -d sqlpad
-	@echo "[sqlpad] SQLPad ready at http://localhost:3000"
-	@echo "[sqlpad] Login: admin@example.com / changeme"
-
-sqlpad-down: ## Stop SQLPad container
-	@echo "[sqlpad] Stopping SQLPad"
-	docker compose stop sqlpad
-
-sqlpad-logs: ## Tail SQLPad logs
-	@echo "[sqlpad] Tailing logs (Ctrl-C to stop)"
-	docker compose logs -f sqlpad | cat
-
 partition-data: ## Partition raw Parquet files by trip_date
 	@echo "[partition] Partitioning data by trip_date"
 	$(PY) scripts/partition_nyc_taxi_data.py --input-dir /data/raw --output-dir /data/partitioned --delete-source
@@ -88,14 +70,14 @@ demo-late-data: ## Download additional older data to simulate late-arriving trip
 demo-01: ## Run Demo v1: Full Batch Processing
 	@echo "[demo-v1] Running full batch models"
 	$(DBT) run --select stg_trips agg_daily_revenue_v1
-	@echo "[demo-v1] Demo complete! Check SQLPad at http://localhost:3000"
+	@echo "[demo-v1] Demo complete!"
 
 demo-02: ## Run Demo v2: Incremental Event Processing
 	@echo "[demo-v2] Running incremental event models"
 	$(DBT) run --select stg_trips_v2 agg_daily_revenue_v2
-	@echo "[demo-v2] Demo complete! Check SQLPad at http://localhost:3000"
+	@echo "[demo-v2] Demo complete!"
 
 demo-03: ## Run Demo v3: Incremental Aggregation with Partition Overwrite
 	@echo "[demo-v3] Running incremental aggregation models"
 	$(DBT) run --select stg_trips agg_daily_revenue_v3
-	@echo "[demo-v3] Demo complete! Check SQLPad at http://localhost:3000"
+	@echo "[demo-v3] Demo complete!"

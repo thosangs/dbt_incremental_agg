@@ -77,28 +77,6 @@ services:
     networks:
       - spark-network
 
-  sqlpad:
-    image: sqlpad/sqlpad:7.5.7
-    container_name: pycon25-sqlpad
-    depends_on:
-      - spark-thrift
-    ports:
-      - "3000:3000"
-    environment:
-      SQLPAD_ADMIN: admin@example.com
-      SQLPAD_ADMIN_PASSWORD: changeme
-      SQLPAD_APP_LOG_LEVEL: info
-      SQLPAD_WEB_LOG_LEVEL: warn
-    volumes:
-      - ./data:/data
-      - sqlpad-data:/var/lib/sqlpad
-    restart: unless-stopped
-    networks:
-      - spark-network
-
 networks:
   spark-network:
     driver: bridge
-
-volumes:
-  sqlpad-data:
