@@ -94,8 +94,31 @@ models:
       - name: running_revenue
         tests: [not_null]
 
-  - name: agg_daily_revenue_with_holidays
-    description: Python model demonstrating Holidays package integration with PySpark - enriches daily revenue with US holiday information
+  - name: agg_daily_revenue_with_holidays_pandas
+    description: |
+      Python model demonstrating Pandas UDFs with DuckDB.
+      Enriches daily revenue aggregation with US holiday information using pandas .apply() for row-level transformations.
+      Best for smaller datasets or when simplicity is preferred.
+    columns:
+      - name: trip_date
+        tests: [not_null]
+      - name: is_holiday
+        description: Boolean flag indicating if the date is a US holiday
+      - name: holiday_name
+        description: Name of the holiday if the date is a US holiday, null otherwise
+      - name: daily_revenue
+        tests: [not_null]
+      - name: daily_trips
+        tests: [not_null]
+      - name: daily_passengers
+      - name: running_revenue
+        tests: [not_null]
+
+  - name: agg_daily_revenue_with_holidays_pyarrow
+    description: |
+      Python model demonstrating PyArrow UDFs with DuckDB.
+      Enriches daily revenue aggregation with US holiday information using PyArrow RecordBatchReader for batch processing.
+      Memory-efficient for large datasets, processes data in chunks (batches of 100k rows).
     columns:
       - name: trip_date
         tests: [not_null]

@@ -1,9 +1,8 @@
 {{
   config(
     materialized='incremental',
-    file_format='parquet',
-    partition_by=['trip_date'],
-    incremental_strategy='insert_overwrite',
+    incremental_strategy='merge',
+    unique_key='trip_ts',
     on_schema_change='append_new_columns'
   )
 }}
@@ -11,7 +10,7 @@
 -- Version 2: Incremental Event Processing
 -- This staging model processes trips incrementally using a rolling window.
 -- On incremental runs, it reprocesses the last 7 days to catch late-arriving events.
--- Uses insert_overwrite strategy to efficiently update only affected partitions.
+-- Uses merge strategy to efficiently update only affected records.
 -- 
 -- Use case: Event streams where new events arrive continuously,
 -- and you want to reprocess recent data to handle late-arriving events.

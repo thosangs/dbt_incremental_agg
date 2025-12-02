@@ -1,7 +1,7 @@
-DBT := docker compose exec -T dbt dbt --profile pycon25_spark
+DBT := docker compose exec -T dbt dbt --profile pycon25_duckdb
 PY := docker compose exec -T dbt python
 
-.PHONY: help build setup seed run test clean spark-up spark-down spark-logs demo-late-data demo-01 demo-02 demo-03 dbt-shell
+.PHONY: help build setup seed run test clean up down demo-late-data demo-01 demo-02 demo-03 dbt-shell
 
 help: ## Show this help
 	@echo "Usage: make <target>"
@@ -18,11 +18,18 @@ setup: build ## Build images and prepare runtime dirs
 	@mkdir -p data/warehouse data/raw data/partitioned
 	@chmod -R 777 data/warehouse data/raw data/partitioned || true
 
-download-data: ## Download NYC taxi data (default: 2022-2023) and partition by date
-	@echo "[download] Downloading NYC Yellow Taxi data"
-	$(PY) scripts/download_nyc_taxi_data.py --output-dir /data/raw
-	@echo "[partition] Partitioning data by trip_date using dbt model"
-	$(DBT) run --select partition_trips
+up: ## Start dbt container
+	@echo "[docker] Starting dbt container"
+	docker compose up -d dbt
+	@echo "[docker] dbt container ready"
+
+down: ## Stop dbt container
+	@echo "[docker] Stopping dbt container"
+	docker compose stop dbt
+
+download-data: ## Download and repartition NYC taxi data (default: Sept-Oct 2025) using DuckDB
+	@echo "[download] Downloading and repartitioning NYC Yellow Taxi data"
+	$(PY) scripts/download_and_repartition.py --raw-dir /data/raw --partitioned-dir /data/partitioned
 
 run: ## Run dbt models
 	@echo "[dbt] Running models"
@@ -41,39 +48,17 @@ dbt-shell: ## Open a shell into the dbt container
 	@echo "[dbt] Opening shell"
 	docker compose exec dbt bash
 
-spark-up: ## Start Spark cluster (master, worker, thrift) and dbt containers
-	@echo "[spark] Starting Spark cluster"
-	docker compose up -d spark-master spark-worker spark-thrift dbt
-	@echo "[spark] Waiting for Spark Thrift server to be ready..."
-	@sleep 10
-	@echo "[spark] Spark cluster ready. Thrift server at localhost:10000"
-
-spark-down: ## Stop Spark cluster containers
-	@echo "[spark] Stopping Spark cluster"
-	docker compose stop spark-master spark-worker spark-thrift
-
-spark-logs: ## Tail Spark Thrift server logs
-	@echo "[spark] Tailing Spark Thrift logs (Ctrl-C to stop)"
-	docker compose logs -f spark-thrift | cat
-
 partition-data: ## Partition raw Parquet files by trip_date using dbt model (defaults to SQL version)
 	@echo "[partition] Partitioning data by trip_date using dbt model"
-	$(DBT) run --select partition_trips
+	$(DBT) run --select partition_trips_v1
 
 partition-data-sql: ## Partition raw Parquet files using SQL dbt model
 	@echo "[partition] Partitioning data using SQL model"
-	$(DBT) run --select partition_trips.sql
+	$(DBT) run --select partition_trips_v1
 
 partition-data-python: ## Partition raw Parquet files using Python dbt model
 	@echo "[partition] Partitioning data using Python model"
-	$(DBT) run --select partition_trips.py
-
-demo-late-data: ## Download additional older data to simulate late-arriving trips
-	@echo "[demo] Downloading older data to simulate late-arriving trips"
-	$(PY) scripts/download_nyc_taxi_data.py --start-year 2021 --start-month 1 --end-year 2021 --end-month 3 --output-dir /data/raw --skip-existing
-	@echo "[partition] Partitioning late-arriving data using dbt model"
-	$(DBT) run --select partition_trips
-	@echo "[demo] Late-arriving data downloaded and partitioned. Re-run 'make run' to process."
+	$(DBT) run --select partition_trips_v2
 
 demo-01: ## Run Demo v1: Full Batch Processing
 	@echo "[demo-v1] Running full batch models"

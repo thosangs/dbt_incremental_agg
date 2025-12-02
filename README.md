@@ -1,6 +1,6 @@
-### Incremental Aggregations Journey: dbt + Spark (PyCon 2025 Talk Demo)
+### Incremental Aggregations Journey: dbt + DuckDB (PyCon 2025 Talk Demo)
 
-This project demonstrates a progressive journey through incremental data processing patterns using dbt and Apache Spark (with Parquet). It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with partition overwrite.
+This project demonstrates a progressive journey through incremental data processing patterns using dbt and DuckDB. It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with sliding window using DuckDB's merge strategy.
 
 The repo is optimized for live demos: everything runs locally in Docker, requires no external cloud credentials, and can be reset quickly.
 
@@ -8,11 +8,12 @@ The repo is optimized for live demos: everything runs locally in Docker, require
 
 ### What's inside
 
-- **dbt project** targeting Spark with staging and incremental aggregation models
+- **dbt project** targeting DuckDB with staging and incremental aggregation models
+- **Python models** demonstrating DuckDB Python API integration with holidays package
 - **Three progressive demos** showing the evolution from full batch to sophisticated incremental patterns
 - **NYC Yellow Taxi Trip Data** from the NYC Taxi & Limousine Commission (TLC) - real-world time-series data
-- **Data download script** to fetch parquet files from TLC's public data repository
-- **Spark Standalone cluster** with Thrift server for JDBC connectivity
+- **Data download script** to fetch parquet files from TLC's public data repository (Sept-Oct 2025)
+- **DuckDB** embedded database for fast analytical queries
 - **Docker Compose** orchestration for the entire stack
 
 ---
@@ -31,11 +32,11 @@ The repo is optimized for live demos: everything runs locally in Docker, require
 **Use case**: Event streams with continuous new data  
 **Trade-off**: Efficient event processing but doesn't handle late-arriving events well
 
-#### Demo 03: Incremental Aggregation with Partition Overwrite
+#### Demo 03: Incremental Aggregation with Sliding Window
 
-**Pattern**: Incremental aggregation using Spark's `insert_overwrite` strategy  
+**Pattern**: Incremental aggregation using DuckDB's `merge` strategy with sliding window  
 **Use case**: Time-series aggregations with late-arriving events  
-**Trade-off**: Most sophisticated, handles late data correctly, leverages Spark's partition overwrite
+**Trade-off**: Most sophisticated, handles late data correctly, leverages DuckDB's merge capabilities
 
 Each demo includes its own models and README explaining the pattern, trade-offs, and when to use it.
 
@@ -65,25 +66,18 @@ cd pycon25
 make setup
 ```
 
-3. **Start Spark cluster**
+3. **Start dbt container**
 
 ```bash
-make spark-up
+make up
 ```
 
-This starts:
-
-- Spark master (port 8080 for web UI)
-- Spark worker
-- Spark Thrift server (port 10000 for JDBC)
-- dbt container
-
-Wait a few seconds for Spark Thrift server to be ready.
+This starts the dbt container with DuckDB embedded. No external services needed!
 
 4. **Download NYC taxi data and run a demo**
 
 ```bash
-# Download NYC Yellow Taxi data (default: 2024, ~1GB)
+# Download NYC Yellow Taxi data (default: Sept-Oct 2025)
 make download-data
 
 # Run Demo 01: Full Batch
@@ -98,16 +92,21 @@ make demo-03
 
 5. **Query your models**
 
-You can query your models using any SQL client that supports JDBC connections to Spark:
+You can query your models using DuckDB CLI or any SQL client that supports DuckDB:
 
-- **Host**: `localhost`
-- **Port**: `10000`
-- **Database**: `analytics`
+- **Database file**: `data/warehouse/analytics.duckdb`
+- **Schema**: `analytics`
 
-Example queries:
+Example queries using DuckDB CLI:
+
+```bash
+docker compose exec dbt duckdb /data/warehouse/analytics.duckdb
+```
+
+Then run SQL:
 
 ```sql
-SELECT * FROM analytics.stg_trips LIMIT 100;
+SELECT * FROM analytics.stg_trips_v1 LIMIT 100;
 SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date;
 SELECT trip_date, daily_revenue, daily_trips FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
 ```
@@ -135,18 +134,18 @@ make demo-02
 #### Step 3: Advanced Incremental Aggregation (Version 3)
 
 ```bash
-# First run - downloads and processes 2022-2023 data
+# First run - downloads and processes Sept-Oct 2025 data
 make download-data
 make demo-03
 
 # Download older data to simulate late-arriving trips
 make demo-late-data
 
-# Re-run - only affected partitions are reprocessed
+# Re-run - only affected date ranges are reprocessed using sliding window
 make run
 ```
 
-**What happens**: Uses Spark's `insert_overwrite` to efficiently reprocess only affected date partitions, handling late-arriving events correctly. When you download older months (e.g., 2021 Q1), those trips will update the historical partitions.
+**What happens**: Uses DuckDB's `merge` strategy with a sliding window to efficiently reprocess only affected date ranges, handling late-arriving events correctly. When you download older months (e.g., August 2025), those trips will update the historical aggregations within the sliding window.
 
 ---
 
@@ -154,40 +153,45 @@ make run
 
 ```text
 .
-├── Dockerfile                    # Python container for dbt + Spark dependencies
-├── Makefile                      # Orchestrates dockerized dbt and Spark
-├── docker-compose.yml            # Spark cluster + dbt services
+├── Dockerfile                    # Python container for dbt + DuckDB dependencies
+├── Makefile                      # Orchestrates dockerized dbt and DuckDB
+├── docker-compose.yml            # dbt service
 ├── dbt_project.yml              # dbt project configuration
 ├── profiles/
-│   └── profiles.yml              # dbt profile for Spark connection
+│   └── profiles.yml              # dbt profile for DuckDB connection
 ├── models/
 │   ├── schema.yml                # Model documentation and tests
 │   ├── sources.yml               # Source definitions for parquet files
 │   ├── staging/
-│   │   ├── stg_trips.sql        # Staging model (view - used by v1 & v3)
-│   │   └── stg_trips_v2.sql     # Incremental staging (used by v2)
+│   │   ├── partition_trips_v1.sql # Partition raw data by trip_date
+│   │   ├── partition_trips_v2.py   # Python version of partition model
+│   │   ├── stg_trips_v1.sql        # Staging model (view - used by v1 & v3)
+│   │   └── stg_trips_v2.sql        # Incremental staging (used by v2)
 │   └── metrics/
-│       ├── agg_daily_revenue_v1.sql # Version 1: Full batch
-│       ├── agg_daily_revenue_v2.sql # Version 2: Incremental events
-│       └── agg_daily_revenue_v3.sql # Version 3: Incremental aggregation (recommended)
+│       ├── agg_daily_revenue_v1.sql              # Version 1: Full batch
+│       ├── agg_daily_revenue_v2.sql              # Version 2: Incremental events
+│       ├── agg_daily_revenue_v3.sql              # Version 3: Incremental aggregation (recommended)
+│       └── agg_daily_revenue_with_holidays.py    # Python model with holidays
 ├── scripts/
 │   └── download_nyc_taxi_data.py # Script to download NYC taxi parquet files
 ├── data/                         # Created at runtime
 │   ├── raw/                      # Downloaded parquet files (NYC taxi data)
-│   └── warehouse/                # dbt output (tables/views)
+│   ├── partitioned/              # Partitioned data (optional)
+│   └── warehouse/                # DuckDB database file (analytics.duckdb)
 ├── requirements.txt              # Python dependencies
 └── README.md
 ```
 
 ---
 
-### dbt + Spark details
+### dbt + DuckDB details
 
 - **Profiles**: Stored locally under `profiles/profiles.yml` for portability
-- **Storage**: Parquet files in `data/warehouse/` directory
+- **Storage**: DuckDB database file at `data/warehouse/analytics.duckdb`
 - **Schema**: `analytics` (default)
-- **Connection**: JDBC via Spark Thrift server (`spark-thrift:10000`)
-- **Incremental Strategy**: `insert_overwrite` with partition overwrite (Version 3)
+- **Connection**: File-based DuckDB database (embedded, no external service)
+- **Incremental Strategy**: `merge` with sliding window (Version 3)
+- **Python Models**: Supported natively - Python models execute in the same process as dbt
 
 ---
 
@@ -197,35 +201,32 @@ make run
 # Build images and prepare runtime dirs
 make setup
 
-# Start Spark cluster
-make spark-up
+# Start dbt container
+make up
 
-# Download NYC taxi data (default: 2024, ~1GB)
+# Download NYC taxi data (default: Sept-Oct 2025)
 make download-data
 
 # Build models
 make run
 
 # Run specific demo version
-make demo-01  # Version 1: Full batch (stg_trips + agg_daily_revenue_v1)
+make demo-01  # Version 1: Full batch (stg_trips_v1 + agg_daily_revenue_v1)
 make demo-02  # Version 2: Incremental events (stg_trips_v2 + agg_daily_revenue_v2)
-make demo-03  # Version 3: Incremental aggregation (stg_trips + agg_daily_revenue_v3)
+make demo-03  # Version 3: Incremental aggregation (stg_trips_v1 + agg_daily_revenue_v3)
 
 # Simulate late-arriving data and re-run
-make demo-late-data  # Downloads older months (2021 Q1)
+make demo-late-data  # Downloads August 2025
 make run
 
 # Run dbt tests
 make test
 
 # Run specific model
-docker compose exec -T dbt dbt --profiles-dir profiles run --select metrics.agg_daily_revenue_v3
+docker compose exec -T dbt dbt --profiles-dir profiles --profile pycon25_duckdb run --select metrics.agg_daily_revenue_v3
 
-# View logs
-make spark-logs
-
-# Stop services
-make spark-down
+# Stop container
+make down
 
 # Clean build artifacts
 make clean
@@ -233,14 +234,15 @@ make clean
 
 ---
 
-### Spark-specific features
+### DuckDB-specific features
 
-This project leverages Spark's capabilities:
+This project leverages DuckDB's capabilities:
 
-- **Partition Overwrite**: Unlike DuckDB, Spark supports efficient partition-level overwrites via `insert_overwrite` strategy
-- **Parquet Storage**: Columnar format for efficient analytics queries
-- **Thrift Server**: JDBC connectivity for SQL clients
-- **Distributed Processing**: Spark Standalone cluster for parallel processing
+- **Merge Strategy**: DuckDB's `merge` statement efficiently handles incremental updates with sliding window
+- **Parquet Reading**: Native support for reading Parquet files directly with `read_parquet()` function
+- **Python Models**: Native support for Python models that execute in the same process as dbt
+- **Embedded Database**: No external services needed - DuckDB runs embedded in dbt
+- **Fast Analytics**: Optimized for analytical queries on columnar data
 
 ---
 
@@ -248,18 +250,24 @@ This project leverages Spark's capabilities:
 
 1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing
 2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts
-3. **Finish with Version 3** (`make demo-03`) to showcase Spark's partition overwrite capabilities
-4. **Use `make demo-late-data`** to download older months and show how Version 3 handles late-arriving trips correctly
-5. **Query results** using any SQL client that supports JDBC connections to Spark:
+3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's merge strategy with sliding window
+4. **Show Python models** (`agg_daily_revenue_with_holidays.py`) to demonstrate DuckDB's Python API support
+5. **Use `make demo-late-data`** to download older months and show how Version 3 handles late-arriving trips correctly
+6. **Query results** using DuckDB CLI:
+   ```bash
+   docker compose exec dbt duckdb /data/warehouse/analytics.duckdb
+   ```
+   Then:
    ```sql
    SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
    ```
-6. **Emphasize**:
-   - How `is_incremental()` limits work to changed partitions
-   - Spark's `insert_overwrite` strategy vs. simpler incremental approaches
+7. **Emphasize**:
+   - How `is_incremental()` limits work to changed date ranges in sliding window
+   - DuckDB's `merge` strategy vs. simpler incremental approaches
    - The trade-offs between simplicity and efficiency
    - Real-world NYC taxi data demonstrates natural late-arriving patterns (data published ~2 months after collection)
    - All versions are available side-by-side for easy comparison
+   - Python models work seamlessly with DuckDB (no external cluster needed)
 
 ---
 
@@ -277,21 +285,22 @@ The data is published monthly with a ~2-month delay, making it ideal for demonst
 
 ### Troubleshooting
 
-- **Spark Thrift server not ready**: Wait 10-15 seconds after `make spark-up` before running dbt commands
-- **Connection errors**: Ensure Spark Thrift server is running (`make spark-logs` to check)
+- **DuckDB database locked**: Ensure only one dbt process is accessing the database at a time
 - **Parquet files not found**: Run `make download-data` to download NYC taxi data
-- **Download fails**: Check internet connection. Files are ~50-100MB each. Ensure sufficient disk space (~2GB for default range)
-- **Memory issues**: Ensure Docker has at least 4GB RAM allocated (Spark needs memory)
-- **Port conflicts**: Ensure ports 8080 (Spark UI) and 10000 (Thrift) are available
+- **Download fails**: Check internet connection. Files are ~50-100MB each. Ensure sufficient disk space
+- **Python model errors**: Ensure all required packages are in `requirements.txt` (holidays, pandas)
+- **Connection errors**: Ensure dbt container is running (`make up`)
 
 ---
 
-### Why Spark instead of DuckDB?
+### Why DuckDB?
 
-- **Partition Overwrite**: Spark's `insert_overwrite` strategy efficiently handles partition-level updates, which DuckDB doesn't support natively
-- **Scalability**: Spark is designed for distributed processing and larger datasets
-- **Production-ready**: Spark is commonly used in production data pipelines
-- **JDBC Support**: Better integration with SQL tools via Thrift server
+- **Simplicity**: No external services needed - DuckDB runs embedded in dbt
+- **Python Models**: Native support for Python models without external clusters
+- **Fast Analytics**: Optimized for analytical queries on columnar data
+- **Merge Strategy**: Efficient incremental updates with sliding window support
+- **Local Development**: Perfect for local development and demos
+- **Parquet Native**: Direct support for reading Parquet files without external tools
 
 ---
 
