@@ -9,10 +9,10 @@ The repo is optimized for live demos: everything runs locally in Docker, require
 ### What's inside
 
 - **dbt project** targeting DuckDB with staging and incremental aggregation models
-- **Python models** demonstrating DuckDB Python API integration with holidays package
+- **Python models** demonstrating DuckDB Python API with two UDF approaches (Pandas and PyArrow)
 - **Three progressive demos** showing the evolution from full batch to sophisticated incremental patterns
 - **NYC Yellow Taxi Trip Data** from the NYC Taxi & Limousine Commission (TLC) - real-world time-series data
-- **Data download script** to fetch parquet files from TLC's public data repository (Sept-Oct 2025)
+- **Download and repartition script** that downloads monthly Parquet files, repartitions them into daily files using DuckDB, and cleans up old monthly files
 - **DuckDB** embedded database for fast analytical queries
 - **Docker Compose** orchestration for the entire stack
 
@@ -74,10 +74,12 @@ make up
 
 This starts the dbt container with DuckDB embedded. No external services needed!
 
-4. **Download NYC taxi data and run a demo**
+4. **Download, repartition, and run a demo**
 
 ```bash
-# Download NYC Yellow Taxi data (default: Sept-Oct 2025)
+# Download and repartition NYC Yellow Taxi data (default: Sept-Oct 2025)
+# This downloads monthly files, repartitions them into daily files using DuckDB,
+# and automatically deletes the monthly files to save space
 make download-data
 
 # Run Demo 01: Full Batch
@@ -134,12 +136,15 @@ make demo-02
 #### Step 3: Advanced Incremental Aggregation (Version 3)
 
 ```bash
-# First run - downloads and processes Sept-Oct 2025 data
+# First run - downloads, repartitions, and processes Sept-Oct 2025 data
 make download-data
 make demo-03
 
-# Download older data to simulate late-arriving trips
-make demo-late-data
+# Download and repartition older data to simulate late-arriving trips
+# (e.g., August 2025)
+docker compose exec -T dbt python scripts/download_and_repartition.py \
+  --start-year 2025 --start-month 8 --end-year 2025 --end-month 8 \
+  --raw-dir /data/raw --partitioned-dir /data/partitioned --skip-existing
 
 # Re-run - only affected date ranges are reprocessed using sliding window
 make run
@@ -163,20 +168,20 @@ make run
 │   ├── schema.yml                # Model documentation and tests
 │   ├── sources.yml               # Source definitions for parquet files
 │   ├── staging/
-│   │   ├── partition_trips_v1.sql # Partition raw data by trip_date
-│   │   ├── partition_trips_v2.py   # Python version of partition model
 │   │   ├── stg_trips_v1.sql        # Staging model (view - used by v1 & v3)
 │   │   └── stg_trips_v2.sql        # Incremental staging (used by v2)
 │   └── metrics/
-│       ├── agg_daily_revenue_v1.sql              # Version 1: Full batch
-│       ├── agg_daily_revenue_v2.sql              # Version 2: Incremental events
-│       ├── agg_daily_revenue_v3.sql              # Version 3: Incremental aggregation (recommended)
-│       └── agg_daily_revenue_with_holidays.py    # Python model with holidays
+│       ├── agg_daily_revenue_v1.sql                        # Version 1: Full batch
+│       ├── agg_daily_revenue_v2.sql                        # Version 2: Incremental events
+│       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation (recommended)
+│       ├── agg_daily_revenue_with_holidays_pandas.py      # Python model with Pandas UDFs
+│       └── agg_daily_revenue_with_holidays_pyarrow.py     # Python model with PyArrow UDFs
 ├── scripts/
-│   └── download_nyc_taxi_data.py # Script to download NYC taxi parquet files
+│   ├── download_nyc_taxi_data.py          # Legacy: Download only script
+│   └── download_and_repartition.py        # Download, repartition, and cleanup script
 ├── data/                         # Created at runtime
-│   ├── raw/                      # Downloaded parquet files (NYC taxi data)
-│   ├── partitioned/              # Partitioned data (optional)
+│   ├── raw/                      # Temporary: Monthly parquet files (deleted after repartitioning)
+│   ├── partitioned/              # Daily partitioned parquet files (YYYY/MM/DD/*.parquet)
 │   └── warehouse/                # DuckDB database file (analytics.duckdb)
 ├── requirements.txt              # Python dependencies
 └── README.md
@@ -204,7 +209,8 @@ make setup
 # Start dbt container
 make up
 
-# Download NYC taxi data (default: Sept-Oct 2025)
+# Download and repartition NYC taxi data (default: Sept-Oct 2025)
+# Downloads monthly files, repartitions into daily files using DuckDB, deletes monthly files
 make download-data
 
 # Build models
@@ -215,8 +221,10 @@ make demo-01  # Version 1: Full batch (stg_trips_v1 + agg_daily_revenue_v1)
 make demo-02  # Version 2: Incremental events (stg_trips_v2 + agg_daily_revenue_v2)
 make demo-03  # Version 3: Incremental aggregation (stg_trips_v1 + agg_daily_revenue_v3)
 
-# Simulate late-arriving data and re-run
-make demo-late-data  # Downloads August 2025
+# Download and repartition additional data (e.g., for late-arriving data demo)
+docker compose exec -T dbt python scripts/download_and_repartition.py \
+  --start-year 2025 --start-month 8 --end-year 2025 --end-month 8 \
+  --raw-dir /data/raw --partitioned-dir /data/partitioned --skip-existing
 make run
 
 # Run dbt tests
@@ -240,7 +248,11 @@ This project leverages DuckDB's capabilities:
 
 - **Merge Strategy**: DuckDB's `merge` statement efficiently handles incremental updates with sliding window
 - **Parquet Reading**: Native support for reading Parquet files directly with `read_parquet()` function
+- **Parquet Writing**: Native support for writing Parquet files with `COPY ... TO` statement
+- **Data Repartitioning**: Efficient repartitioning of monthly Parquet files into daily partitions using DuckDB
 - **Python Models**: Native support for Python models that execute in the same process as dbt
+  - **Pandas UDFs**: Row-level transformations using pandas `.apply()`
+  - **PyArrow UDFs**: Batch processing using PyArrow RecordBatchReader for memory-efficient operations
 - **Embedded Database**: No external services needed - DuckDB runs embedded in dbt
 - **Fast Analytics**: Optimized for analytical queries on columnar data
 
@@ -251,8 +263,10 @@ This project leverages DuckDB's capabilities:
 1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing
 2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts
 3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's merge strategy with sliding window
-4. **Show Python models** (`agg_daily_revenue_with_holidays.py`) to demonstrate DuckDB's Python API support
-5. **Use `make demo-late-data`** to download older months and show how Version 3 handles late-arriving trips correctly
+4. **Show Python models**:
+   - `agg_daily_revenue_with_holidays_pandas.py` - Demonstrates Pandas UDFs with `.apply()`
+   - `agg_daily_revenue_with_holidays_pyarrow.py` - Demonstrates PyArrow batch processing UDFs
+5. **Show data repartitioning**: Demonstrate how `make download-data` uses DuckDB to repartition monthly files into daily partitions and clean up old files
 6. **Query results** using DuckDB CLI:
    ```bash
    docker compose exec dbt duckdb /data/warehouse/analytics.duckdb
@@ -283,13 +297,47 @@ This project uses **NYC Yellow Taxi Trip Data** from the [NYC Taxi & Limousine C
 
 The data is published monthly with a ~2-month delay, making it ideal for demonstrating late-arriving data patterns.
 
+### Data Download and Repartitioning
+
+The `download_and_repartition.py` script provides a streamlined workflow:
+
+1. **Downloads** monthly Parquet files from NYC TLC's public repository
+2. **Repartitions** monthly files into daily Parquet files using DuckDB's native Parquet operations
+3. **Organizes** daily files in a `YYYY/MM/DD/` directory structure
+4. **Cleans up** by deleting original monthly files after successful repartitioning
+
+**Key Features:**
+
+- Uses DuckDB's `read_parquet()` and `COPY ... TO` for efficient processing
+- Processes data in-memory with DuckDB (no intermediate storage needed)
+- Automatically deletes monthly files to save disk space
+- Can skip existing files with `--skip-existing` flag
+- Can preserve monthly files with `--keep-monthly` flag
+
+**Example:**
+
+```bash
+# Download and repartition Sept-Oct 2025 (default)
+make download-data
+
+# Custom date range with options
+docker compose exec -T dbt python scripts/download_and_repartition.py \
+  --start-year 2025 --start-month 9 \
+  --end-year 2025 --end-month 10 \
+  --raw-dir /data/raw \
+  --partitioned-dir /data/partitioned \
+  --keep-monthly  # Keep monthly files instead of deleting
+```
+
 ### Troubleshooting
 
 - **DuckDB database locked**: Ensure only one dbt process is accessing the database at a time
-- **Parquet files not found**: Run `make download-data` to download NYC taxi data
+- **Parquet files not found**: Run `make download-data` to download and repartition NYC taxi data
 - **Download fails**: Check internet connection. Files are ~50-100MB each. Ensure sufficient disk space
-- **Python model errors**: Ensure all required packages are in `requirements.txt` (holidays, pandas)
+- **Repartitioning fails**: Ensure DuckDB is installed (`duckdb>=0.10.0` in requirements.txt)
+- **Python model errors**: Ensure all required packages are in `requirements.txt` (holidays, pandas, pyarrow, duckdb)
 - **Connection errors**: Ensure dbt container is running (`make up`)
+- **Monthly files not deleted**: Check that repartitioning completed successfully. Use `--keep-monthly` flag to preserve monthly files
 
 ---
 
@@ -300,7 +348,9 @@ The data is published monthly with a ~2-month delay, making it ideal for demonst
 - **Fast Analytics**: Optimized for analytical queries on columnar data
 - **Merge Strategy**: Efficient incremental updates with sliding window support
 - **Local Development**: Perfect for local development and demos
-- **Parquet Native**: Direct support for reading Parquet files without external tools
+- **Parquet Native**: Direct support for reading and writing Parquet files without external tools
+- **Efficient Repartitioning**: Can easily repartition large Parquet files using native SQL operations
+- **Memory Efficient**: PyArrow batch processing allows handling datasets larger than available memory
 
 ---
 
