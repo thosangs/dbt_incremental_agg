@@ -375,8 +375,6 @@ This project leverages DuckDB's superpowers:
 3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's merge strategy with sliding window (the "finally, it's perfect!" approach 🎯)
 4. **Show Python models** 🐍:
    - `agg_daily_revenue_py_v1.py`, `agg_daily_revenue_py_v2.py`, `agg_daily_revenue_py_v3.py` - Same patterns in Python!
-   - `agg_daily_revenue_with_holidays_pandas.py` - Demonstrates Pandas UDFs with `.apply()`
-   - `agg_daily_revenue_with_holidays_pyarrow.py` - Demonstrates PyArrow batch processing UDFs
 5. **Show data generation**: Demonstrate how `make up` uses DuckDB to generate store transaction data and export as Hive-partitioned Parquet files (because organization matters! 🗂️)
 6. **Query results** using DuckDB CLI:
    ```bash

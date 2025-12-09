@@ -9,3 +9,27 @@ services:
     environment:
       DBT_PROFILES_DIR: /app/profiles
     command: ["sleep", "infinity"]
+
+  marimo:
+    build:
+      context: .
+      dockerfile: Dockerfile.marimo
+    container_name: pycon25-marimo
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts
+      - ./data:/data
+    ports:
+      - "8080:8080"
+    depends_on:
+      - dbt
+    command:
+      [
+        "marimo",
+        "run",
+        "scripts/visualize_revenue.py",
+        "--host",
+        "0.0.0.0",
+        "-p",
+        "8080",
+      ]

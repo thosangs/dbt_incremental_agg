@@ -23,7 +23,7 @@ def model(dbt, session):
     """
 
     # Get from_date from dbt variables
-    from_date_str = dbt.config.get("vars", {}).get("from_date")
+    from_date_str = dbt.config.get("from_date")
 
     # Parse date from string format 'YYYY-MM-DD'
     from_date = pd.to_datetime(from_date_str).date()
@@ -101,9 +101,9 @@ def model(dbt, session):
     orders_relation = dbt.ref("stg_orders_v2")
     batch_reader = orders_relation.record_batch(100_000)
 
-    if dbt.is_incremental():
+    if dbt.is_incremental:
         # Incremental run: reprocess sliding window using from_date variable
-        existing_table = dbt.this()
+        existing_table = dbt.this
 
         # Use from_date from dbt variables
         reprocess_from = pd.Timestamp(from_date)

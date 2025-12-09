@@ -9,19 +9,19 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk -F':|##' '/^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-20s %s\n", $$1, $$3 }' $(MAKEFILE_LIST) | sort
 
-up: ## Start dbt container
-	@echo "[up] Creating runtime dirs"
+up: ## Start dbt and marimo containers
+	@echo "[up-viz] Starting all services"
 	@mkdir -p data/warehouse data/partitioned
 	@chmod -R 777 data/warehouse data/partitioned || true
-	@echo "[docker] Starting dbt container"
-	docker compose up -d dbt
-	@echo "[docker] dbt container ready"
+	docker compose up -d
+	@echo "[docker] All containers ready"
 	@echo "[generate] Generating store transaction data"
 	$(PY) scripts/generate_store_transactions.py --partitioned-dir /data/partitioned
+	@echo "[marimo] Visualization notebook available at http://localhost:8080"
 
-down: ## Stop dbt container
-	@echo "[docker] Stopping dbt container"
-	docker compose stop dbt
+down: ## Stop all containers
+	@echo "[docker] Stopping all containers"
+	docker compose stop
 
 run: ## Run dbt models
 	@echo "[dbt] Running models"
@@ -53,4 +53,19 @@ demo-02: ## Run Demo v2: Incremental Event Processing
 demo-03: ## Run Demo v3: Incremental Aggregation with Sliding Window
 	@echo "[demo-v3] Running incremental aggregation models"
 	$(DBT) run --select +agg_daily_revenue_v3
+	@echo "[demo-v3] Demo complete!"
+
+demo-01-py: ## Run Demo v1: Full Batch Processing
+	@echo "[demo-v1] Running full batch models"
+	$(DBT) run --select +agg_daily_revenue_py_v1
+	@echo "[demo-v1] Demo complete!"
+
+demo-02-py: ## Run Demo v2: Incremental Event Processing
+	@echo "[demo-v2] Running incremental event models"
+	$(DBT) run --select +agg_daily_revenue_py_v2
+	@echo "[demo-v2] Demo complete!"
+
+demo-03-py: ## Run Demo v3: Incremental Aggregation with Sliding Window
+	@echo "[demo-v3] Running incremental aggregation models"
+	$(DBT) run --select +agg_daily_revenue_py_v3
 	@echo "[demo-v3] Demo complete!"

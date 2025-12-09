@@ -377,7 +377,7 @@ GROUP BY order_date
 **The magic line:**
 
 ```sql
-WHERE order_date >= (SELECT MAX(order_date) FROM {{ this }}) - INTERVAL 14 DAYS
+WHERE order_date >= DATE "{{ var('from_date') }}" - INTERVAL 1 DAYS
 ```
 
 **That's it. That's the line.** ✨
@@ -400,23 +400,15 @@ sequenceDiagram
     agg->>warehouse: CREATE TABLE (full aggregation)
 
     Note over dbt,warehouse: Day 2: Incremental Run
-    dbt->>warehouse: SELECT MAX(order_date) FROM agg_daily_revenue_v3
-    warehouse-->>dbt: 2024-01-31
-    dbt->>warehouse: Calculate: MAX - 14 DAYS = '2024-01-18'
-    dbt->>staging: SELECT * WHERE date >= '2024-01-25'<br/>(last 7 days - incremental staging)
-    staging-->>dbt: Last 7 days (500K orders)
+    dbt->>warehouse: Calculate: CURRNET_DATE() - 14 DAYS = '2024-01-18'
+    dbt->>staging: SELECT * WHERE date >= '2024-01-25'<br/>(last 14 days - incremental staging)
+    staging-->>dbt: Last 14 days (500K orders)
     dbt->>staging: MERGE into stg_orders_v2
     Note over agg: Aggregation reads only sliding window!
     dbt->>agg: SELECT * FROM stg_orders_v2<br/>WHERE date >= '2024-01-18'<br/>(only last 14 days)
     agg->>warehouse: MERGE (update sliding window only!)
     warehouse-->>dbt: ✅ Updated last 14 days, preserved older data
 
-    Note over dbt,warehouse: Day 3: Late Data Arrives! 🎉
-    Note over staging: August data arrives late
-    dbt->>staging: SELECT * WHERE date >= '2024-01-26'<br/>(last 7 days includes August!)
-    staging-->>dbt: Includes August data
-    dbt->>agg: SELECT * FROM stg_orders_v2<br/>WHERE date >= '2024-01-19'<br/>(sliding window)
-    agg->>warehouse: MERGE (August data correctly updated!)
 
     Note over dbt,warehouse: Both staging AND aggregation incremental ✅<br/>Scans: ~200 GB/day<br/>Cost: $1.25/day<br/>Handles late data! ✅
 ```

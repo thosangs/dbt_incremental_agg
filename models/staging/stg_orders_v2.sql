@@ -15,14 +15,7 @@
 -- Use case: Event streams where new events arrive continuously,
 -- and you want to reprocess recent data to handle late-arriving events.
 
-WITH params AS (
-    {% if is_incremental() %}
-    SELECT DATE '{{ var("from_date") }}' AS reprocess_from
-    {% else %}
-    SELECT DATE '1900-01-01' AS reprocess_from
-    {% endif %}
-),
-raw_orders AS (
+WITH raw_orders AS (
     SELECT
         order_id,
         buyer_id,
@@ -40,7 +33,7 @@ raw_orders AS (
       AND revenue IS NOT NULL
       AND revenue > 0
     {% if is_incremental() %}
-      AND DATE(order_timestamp) >= (SELECT reprocess_from FROM params)
+      AND DATE(order_timestamp) >= DATE '{{ var("from_date") }}'
     {% endif %}
 ),
 source AS (

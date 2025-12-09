@@ -42,7 +42,7 @@ existing_data AS (
         daily_buyers,
         running_revenue
     FROM {{ this }}
-    WHERE order_date = DATE_SUB(DATE('{{ var("from_date") }}'), INTERVAL 1 DAY)
+    WHERE order_date = DATE('{{ var("from_date") }}') - INTERVAL '1' DAY
 ),
 
 combined AS (

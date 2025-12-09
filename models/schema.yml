@@ -106,17 +106,3 @@ models:
         tests: [not_null]
       - name: running_revenue
         tests: [not_null]
-
-  - name: agg_daily_revenue_py_v3
-    description: Version 3 - Incremental aggregation with sliding window (recommended)
-    columns:
-      - name: order_date
-        tests: [not_null]
-      - name: daily_revenue
-        tests: [not_null]
-      - name: daily_orders
-        tests: [not_null]
-      - name: daily_buyers
-        tests: [not_null]
-      - name: running_revenue
-        tests: [not_null]
