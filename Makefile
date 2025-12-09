@@ -1,7 +1,7 @@
 DBT := docker compose exec -T dbt dbt --profile pycon25_duckdb
 PY := docker compose exec -T dbt python
 
-.PHONY: help build setup seed run test clean up down demo-late-data demo-01 demo-02 demo-03 dbt-shell
+.PHONY: help run test clean up down demo-01 demo-02 demo-03 dbt-shell
 
 help: ## Show this help
 	@echo "Usage: make <target>"

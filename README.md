@@ -135,19 +135,13 @@ git clone <your-fork-or-repo-url> pycon25
 cd pycon25
 ```
 
-2. **Build images and prepare runtime directories**
-
-```bash
-make setup
-```
-
-3. **Start dbt container**
+2. **Start dbt container**
 
 ```bash
 make up
 ```
 
-This starts the dbt container with DuckDB embedded. No external services needed!
+This starts the dbt container with DuckDB embedded, creates runtime directories, and generates store transaction data. No external services needed!
 
 4. **Run a demo**
 
@@ -249,9 +243,7 @@ make run
 │       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation (SQL, recommended)
 │       ├── agg_daily_revenue_py_v1.py                      # Version 1: Full batch (Python/PyArrow) 🐍
 │       ├── agg_daily_revenue_py_v2.py                      # Version 2: Incremental events (Python/PyArrow) 🐍
-│       ├── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
-│       ├── agg_daily_revenue_with_holidays_pandas.py      # Bonus: Python model with Pandas UDFs
-│       └── agg_daily_revenue_with_holidays_pyarrow.py     # Bonus: Python model with PyArrow UDFs
+│       └── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
 ├── scripts/
 │   └── generate_store_transactions.py        # Generate store transaction data script
 ├── data/                         # Created at runtime
@@ -303,9 +295,6 @@ graph LR
 ### Common commands
 
 ```bash
-# Build images and prepare runtime dirs
-make setup
-
 # Start dbt container (automatically generates store transaction data)
 make up
 

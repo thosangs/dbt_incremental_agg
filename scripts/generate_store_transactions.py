@@ -21,7 +21,9 @@ Example:
 import argparse
 import sys
 import uuid
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
+from multiprocessing import cpu_count
 from pathlib import Path
 
 import duckdb
@@ -69,7 +71,7 @@ PRODUCTS = generate_products()
 
 def generate_orders_for_date(target_date: date, base_orders: int) -> pd.DataFrame:
     """
-    Generate orders for a specific date with realistic patterns.
+    Generate orders for a specific date with realistic patterns (VECTORIZED VERSION).
 
     Args:
         target_date: Date to generate orders for
@@ -97,65 +99,86 @@ def generate_orders_for_date(target_date: date, base_orders: int) -> pd.DataFram
     num_returning_buyers = int(num_orders * 0.3)
     num_new_buyers = num_orders - num_returning_buyers
 
-    # Generate buyer IDs
-    # Returning buyers (reuse IDs from previous days)
-    returning_buyer_ids = [
-        f"buyer_{np.random.randint(1, 10000)}" for _ in range(num_returning_buyers)
-    ]
-    # New buyers (unique IDs)
-    new_buyer_ids = [
-        f"buyer_{np.random.randint(10000, 99999)}" for _ in range(num_new_buyers)
-    ]
-    buyer_ids = returning_buyer_ids + new_buyer_ids
+    # Generate buyer IDs using vectorized operations
+    returning_buyer_ids = np.array(
+        [f"buyer_{x}" for x in np.random.randint(1, 10000, size=num_returning_buyers)]
+    )
+    new_buyer_ids = np.array(
+        [f"buyer_{x}" for x in np.random.randint(10000, 99999, size=num_new_buyers)]
+    )
+    buyer_ids = np.concatenate([returning_buyer_ids, new_buyer_ids])
 
-    # Generate orders (each order can have 1-5 products)
-    orders = []
-    order_counter = 0
+    # Generate number of products per order (1-5, weighted towards 1-2)
+    # Using vectorized choice
+    products_per_order = np.random.choice(
+        [1, 2, 3, 4, 5], size=num_orders, p=[0.4, 0.3, 0.15, 0.1, 0.05]
+    )
 
-    for buyer_id in buyer_ids:
-        # Number of products per order (1-5, weighted towards 1-2)
-        num_products = np.random.choice([1, 2, 3, 4, 5], p=[0.4, 0.3, 0.15, 0.1, 0.05])
+    # Generate order timestamps (distributed throughout the day)
+    hours = np.random.randint(8, 22, size=num_orders)
+    minutes = np.random.randint(0, 60, size=num_orders)
+    seconds = np.random.randint(0, 60, size=num_orders)
 
-        # Generate order timestamp (distributed throughout the day)
-        hour = np.random.randint(8, 22)  # 8 AM to 10 PM
-        minute = np.random.randint(0, 60)
-        second = np.random.randint(0, 60)
-        order_timestamp = datetime.combine(target_date, datetime.min.time()).replace(
-            hour=hour, minute=minute, second=second
-        )
+    # Generate order IDs
+    order_ids = np.array([str(uuid.uuid4()) for _ in range(num_orders)])
 
-        order_id = str(uuid.uuid4())
+    # Calculate total number of transaction rows (sum of products_per_order)
+    total_transactions = products_per_order.sum()
 
-        # Generate products for this order
-        for _ in range(num_products):
-            product = PRODUCTS[np.random.randint(0, len(PRODUCTS))]
-            product_id = product["id"]
-            quantity = np.random.randint(1, 5)  # 1-4 units per product
-            unit_price = product["base_price"] * np.random.uniform(
-                0.8, 1.2
-            )  # Some price variation
-            revenue = quantity * unit_price
-            payment_method = np.random.choice(PAYMENT_METHODS)
+    # Expand arrays to match transaction count
+    # Repeat each order_id and buyer_id by the number of products in that order
+    expanded_order_ids = np.repeat(order_ids, products_per_order)
+    expanded_buyer_ids = np.repeat(buyer_ids, products_per_order)
 
-            orders.append(
-                {
-                    "order_id": order_id,
-                    "buyer_id": buyer_id,
-                    "order_date": target_date,
-                    "order_timestamp": order_timestamp,
-                    "product_id": product_id,
-                    "quantity": quantity,
-                    "unit_price": round(unit_price, 2),
-                    "revenue": round(revenue, 2),
-                    "payment_method": payment_method,
-                }
-            )
+    # Expand timestamps
+    expanded_hours = np.repeat(hours, products_per_order)
+    expanded_minutes = np.repeat(minutes, products_per_order)
+    expanded_seconds = np.repeat(seconds, products_per_order)
 
-        order_counter += 1
-        if order_counter >= num_orders:
-            break
+    # Generate timestamps
+    base_datetime = datetime.combine(target_date, datetime.min.time())
+    order_timestamps = np.array(
+        [
+            base_datetime.replace(hour=h, minute=m, second=s)
+            for h, m, s in zip(expanded_hours, expanded_minutes, expanded_seconds)
+        ]
+    )
 
-    return pd.DataFrame(orders)
+    # Generate product IDs (vectorized)
+    product_indices = np.random.randint(0, len(PRODUCTS), size=total_transactions)
+    product_ids = np.array([PRODUCTS[idx]["id"] for idx in product_indices])
+    base_prices = np.array([PRODUCTS[idx]["base_price"] for idx in product_indices])
+
+    # Generate quantities (1-4 units per product)
+    quantities = np.random.randint(1, 5, size=total_transactions)
+
+    # Generate unit prices with variation (0.8-1.2x base price)
+    price_multipliers = np.random.uniform(0.8, 1.2, size=total_transactions)
+    unit_prices = base_prices * price_multipliers
+    unit_prices = np.round(unit_prices, 2)
+
+    # Calculate revenue
+    revenues = np.round(quantities * unit_prices, 2)
+
+    # Generate payment methods (vectorized)
+    payment_methods = np.random.choice(PAYMENT_METHODS, size=total_transactions)
+
+    # Create DataFrame directly from arrays (much faster than appending dicts)
+    df = pd.DataFrame(
+        {
+            "order_id": expanded_order_ids,
+            "buyer_id": expanded_buyer_ids,
+            "order_date": target_date,
+            "order_timestamp": order_timestamps,
+            "product_id": product_ids,
+            "quantity": quantities,
+            "unit_price": unit_prices,
+            "revenue": revenues,
+            "payment_method": payment_methods,
+        }
+    )
+
+    return df
 
 
 def export_to_partitioned_parquet(df: pd.DataFrame, partitioned_dir: Path):
@@ -262,6 +285,12 @@ def main():
         default=20000,
         help="Base number of orders per weekday (default: 20000, weekends are ~40% of this)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of parallel workers (default: min(CPU count, days))",
+    )
 
     args = parser.parse_args()
 
@@ -286,33 +315,53 @@ def main():
     print(f"Base orders per weekday: {args.base_orders:,}")
     print()
 
-    # Generate data day by day (to manage memory)
-    print("Generating transactions...")
+    # Generate data using multiprocessing for parallel day processing
+    print("Generating transactions (using multiprocessing)...")
     print("-" * 70)
 
+    # Generate list of dates to process
+    dates_to_process = [start_date + timedelta(days=i) for i in range(args.days)]
+
+    # Use multiprocessing to generate data for multiple days in parallel
+    if args.workers is not None:
+        num_workers = min(args.workers, args.days)
+    else:
+        num_workers = min(cpu_count(), args.days)  # Don't use more workers than days
+
+    print(f"Using {num_workers} parallel worker(s)")
+    print()
     all_transactions = []
-    current_date = start_date
     total_transactions = 0
 
-    while current_date <= end_date:
-        print(
-            f"  {current_date.strftime('%Y-%m-%d')} ({current_date.strftime('%A')})...",
-            end=" ",
-            flush=True,
-        )
+    def process_date(target_date):
+        """Helper function to process a single date and return result with date info."""
+        daily_df = generate_orders_for_date(target_date, args.base_orders)
+        return target_date, daily_df
 
-        # Generate orders for this date
-        daily_df = generate_orders_for_date(current_date, args.base_orders)
-        all_transactions.append(daily_df)
-        total_transactions += len(daily_df)
+    # Process dates in parallel
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        # Submit all tasks
+        future_to_date = {executor.submit(process_date, d): d for d in dates_to_process}
 
-        print(f"✓ {len(daily_df):,} transactions")
+        # Collect results as they complete
+        results = {}
+        completed = 0
+        for future in as_completed(future_to_date):
+            target_date, daily_df = future.result()
+            results[target_date] = daily_df
+            completed += 1
+            print(
+                f"  {target_date.strftime('%Y-%m-%d')} ({target_date.strftime('%A')})... "
+                f"✓ {len(daily_df):,} transactions [{completed}/{args.days}]",
+                flush=True,
+            )
+            total_transactions += len(daily_df)
 
-        current_date += timedelta(days=1)
-
-    # Combine all transactions
+    # Combine all transactions in date order
     print()
     print("Combining transactions...", end=" ", flush=True)
+    sorted_dates = sorted(results.keys())
+    all_transactions = [results[d] for d in sorted_dates]
     combined_df = pd.concat(all_transactions, ignore_index=True)
     print(f"✓ {len(combined_df):,} total transactions")
 

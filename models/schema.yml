@@ -83,18 +83,11 @@ models:
       - name: running_revenue
         tests: [not_null]
 
-  - name: agg_daily_revenue_with_holidays_pandas
-    description: |
-      Python model demonstrating Pandas UDFs with DuckDB.
-      Enriches daily revenue aggregation with US holiday information using pandas .apply() for row-level transformations.
-      Best for smaller datasets or when simplicity is preferred.
+  - name: agg_daily_revenue_py_v1
+    description: Version 1 - Full batch daily revenue aggregation (table refresh)
     columns:
       - name: order_date
         tests: [not_null]
-      - name: is_holiday
-        description: Boolean flag indicating if the date is a US holiday
-      - name: holiday_name
-        description: Name of the holiday if the date is a US holiday, null otherwise
       - name: daily_revenue
         tests: [not_null]
       - name: daily_orders
@@ -102,21 +95,28 @@ models:
       - name: running_revenue
         tests: [not_null]
 
-  - name: agg_daily_revenue_with_holidays_pyarrow
-    description: |
-      Python model demonstrating PyArrow UDFs with DuckDB.
-      Enriches daily revenue aggregation with US holiday information using PyArrow RecordBatchReader for batch processing.
-      Memory-efficient for large datasets, processes data in chunks (batches of 100k rows).
+  - name: agg_daily_revenue_py_v2
+    description: Version 2 - Incremental event processing (incremental staging, full aggregation)
     columns:
       - name: order_date
         tests: [not_null]
-      - name: is_holiday
-        description: Boolean flag indicating if the date is a US holiday
-      - name: holiday_name
-        description: Name of the holiday if the date is a US holiday, null otherwise
       - name: daily_revenue
         tests: [not_null]
       - name: daily_orders
+        tests: [not_null]
+      - name: running_revenue
+        tests: [not_null]
+
+  - name: agg_daily_revenue_py_v3
+    description: Version 3 - Incremental aggregation with sliding window (recommended)
+    columns:
+      - name: order_date
+        tests: [not_null]
+      - name: daily_revenue
+        tests: [not_null]
+      - name: daily_orders
+        tests: [not_null]
+      - name: daily_buyers
         tests: [not_null]
       - name: running_revenue
         tests: [not_null]
