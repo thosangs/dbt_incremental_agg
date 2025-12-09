@@ -1,5 +1,3 @@
-from datetime import date, timedelta
-
 import pandas as pd
 import pyarrow as pa
 
@@ -24,7 +22,11 @@ def model(dbt, session):
     Demonstrates PyArrow batch processing with incremental logic.
     """
 
-    reprocess_window_days = dbt.config.get("reprocess_window_days", 14)
+    # Get from_date from dbt variables
+    from_date_str = dbt.config.get("vars", {}).get("from_date")
+
+    # Parse date from string format 'YYYY-MM-DD'
+    from_date = pd.to_datetime(from_date_str).date()
 
     dbt.config(
         materialized="incremental",
@@ -37,7 +39,7 @@ def model(dbt, session):
     # PyArrow UDF - Batch processing for incremental aggregation
     # ============================================================================
     def aggregate_daily_revenue_incremental_pyarrow(
-        batch_reader: pa.RecordBatchReader, reprocess_from_date: date
+        batch_reader: pa.RecordBatchReader, reprocess_from_date: pd.Timestamp
     ):
         """
         PyArrow UDF: Process data in batches and aggregate daily revenue
@@ -100,50 +102,55 @@ def model(dbt, session):
     batch_reader = orders_relation.record_batch(100_000)
 
     if dbt.is_incremental():
-        # Incremental run: reprocess sliding window
-        # Get max date from existing table
+        # Incremental run: reprocess sliding window using from_date variable
         existing_table = dbt.this()
 
-        # Query max date from existing table
-        try:
-            max_date_df = existing_table.to_df(columns=["order_date"])
-            if not max_date_df.empty:
-                max_date = max_date_df["order_date"].max()
-                if isinstance(max_date, str):
-                    max_date = pd.to_datetime(max_date).date()
-                elif hasattr(max_date, "date"):
-                    max_date = max_date.date()
-                elif pd.isna(max_date):
-                    max_date = None
-            else:
-                max_date = None
-        except Exception:
-            # Table might not exist yet (first incremental run)
-            max_date = None
-
-        if max_date:
-            # Calculate reprocess_from date
-            reprocess_from = max_date - timedelta(days=reprocess_window_days)
-        else:
-            # No existing data, process everything
-            reprocess_from = date(1900, 1, 1)
+        # Use from_date from dbt variables
+        reprocess_from = pd.Timestamp(from_date)
 
         # Get new aggregates for sliding window
         new_agg_iter = aggregate_daily_revenue_incremental_pyarrow(
             batch_reader, reprocess_from
         )
 
-        # Get existing data (older than reprocess window)
+        # Get new aggregates DataFrame
+        new_agg_batch = next(new_agg_iter, None)
+        if new_agg_batch:
+            new_agg_df = new_agg_batch.to_pandas()
+            # Set running_revenue = daily_revenue for new aggregates (will be recalculated)
+            new_agg_df["running_revenue"] = new_agg_df["daily_revenue"]
+        else:
+            new_agg_df = pd.DataFrame(
+                columns=[
+                    "order_date",
+                    "daily_revenue",
+                    "daily_orders",
+                    "daily_buyers",
+                    "running_revenue",
+                ]
+            )
+
+        # Get existing data for the day BEFORE from_date (to get previous running_revenue)
+        from_date_ts = pd.Timestamp(from_date)
+        day_before_from_date = from_date_ts - pd.Timedelta(days=1)
+
         try:
             existing_df = existing_table.to_df()
             if not existing_df.empty:
-                # Filter to dates older than reprocess window
+                # Filter to only the day before from_date
                 existing_df = existing_df[
-                    pd.to_datetime(existing_df["order_date"]).dt.date < reprocess_from
+                    pd.to_datetime(existing_df["order_date"]).dt.date
+                    == day_before_from_date.date()
                 ]
                 existing_df = existing_df[
-                    ["order_date", "daily_revenue", "daily_orders", "daily_buyers"]
-                ].sort_values("order_date")
+                    [
+                        "order_date",
+                        "daily_revenue",
+                        "daily_orders",
+                        "daily_buyers",
+                        "running_revenue",
+                    ]
+                ]
             else:
                 existing_df = pd.DataFrame(
                     columns=[
@@ -151,6 +158,7 @@ def model(dbt, session):
                         "daily_revenue",
                         "daily_orders",
                         "daily_buyers",
+                        "running_revenue",
                     ]
                 )
         except Exception:
@@ -161,33 +169,19 @@ def model(dbt, session):
                     "daily_revenue",
                     "daily_orders",
                     "daily_buyers",
+                    "running_revenue",
                 ]
             )
 
         # Combine new aggregates and existing data
-        new_agg_batch = next(new_agg_iter, None)
-        if new_agg_batch:
-            new_agg_df = new_agg_batch.to_pandas()
-        else:
-            # No new data, just return existing
-            new_agg_df = pd.DataFrame(
-                columns=[
-                    "order_date",
-                    "daily_revenue",
-                    "daily_orders",
-                    "daily_buyers",
-                ]
-            )
-
-        # Combine DataFrames
         if not existing_df.empty:
             combined_df = pd.concat([new_agg_df, existing_df], ignore_index=True)
         else:
             combined_df = new_agg_df
 
-        # Calculate running revenue over combined dataset
+        # Recalculate running_revenue using window function (matching SQL pattern)
         combined_df = combined_df.sort_values("order_date")
-        combined_df["running_revenue"] = combined_df["daily_revenue"].cumsum()
+        combined_df["running_revenue"] = combined_df["running_revenue"].cumsum()
 
         # Select final columns
         final_df = combined_df[

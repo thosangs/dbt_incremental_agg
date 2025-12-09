@@ -181,6 +181,15 @@ def generate_orders_for_date(target_date: date, base_orders: int) -> pd.DataFram
     return df
 
 
+def process_date(target_date: date, base_orders: int):
+    """
+    Helper function to process a single date and return result with date info.
+    Must be at module level for multiprocessing pickling.
+    """
+    daily_df = generate_orders_for_date(target_date, base_orders)
+    return target_date, daily_df
+
+
 def export_to_partitioned_parquet(df: pd.DataFrame, partitioned_dir: Path):
     """
     Export DataFrame to Hive-partitioned Parquet files using DuckDB.
@@ -333,15 +342,13 @@ def main():
     all_transactions = []
     total_transactions = 0
 
-    def process_date(target_date):
-        """Helper function to process a single date and return result with date info."""
-        daily_df = generate_orders_for_date(target_date, args.base_orders)
-        return target_date, daily_df
-
     # Process dates in parallel
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        # Submit all tasks
-        future_to_date = {executor.submit(process_date, d): d for d in dates_to_process}
+        # Submit all tasks (pass base_orders as argument)
+        future_to_date = {
+            executor.submit(process_date, d, args.base_orders): d
+            for d in dates_to_process
+        }
 
         # Collect results as they complete
         results = {}

@@ -17,10 +17,7 @@
 
 WITH params AS (
     {% if is_incremental() %}
-    SELECT (
-        COALESCE((SELECT MAX(order_date) FROM {{ this }}), DATE '1900-01-01')
-        - INTERVAL 7 DAYS
-    ) AS reprocess_from
+    SELECT DATE '{{ var("from_date") }}' AS reprocess_from
     {% else %}
     SELECT DATE '1900-01-01' AS reprocess_from
     {% endif %}

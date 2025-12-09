@@ -16,34 +16,14 @@
 {% endmacro %}
 
 
-{# Helper macro: Get max date from a model #}
-{% macro get_max_date(model, date_column) %}
-  {% set max_date_query %}
-    SELECT MAX({{ date_column }}) AS max_date FROM {{ model }}
-  {% endset %}
-  
-  {% set max_date_result = run_query(max_date_query) %}
-  {% if max_date_result and max_date_result.columns[0].values() %}
-    {{ return(max_date_result.columns[0].values()[0]) }}
-  {% else %}
-    {{ return(none) }}
-  {% endif %}
+{# Helper macro: Get from_date from dbt variables #}
+{% macro get_from_date() %}
+  {{ return(var('from_date')) }}
 {% endmacro %}
 
-
-{# Helper macro: Calculate reprocess_from date #}
-{% macro calculate_reprocess_from(max_date, window_days) %}
-  {% if max_date and max_date >= '2000-01-01' %}
-    {% set reprocess_query %}
-      SELECT DATE '{{ max_date }}' - INTERVAL {{ window_days }} DAYS AS reprocess_from
-    {% endset %}
-    
-    {% set date_result = run_query(reprocess_query) %}
-    {% if date_result and date_result.columns[0].values() %}
-      {{ return(date_result.columns[0].values()[0]) }}
-    {% endif %}
-  {% endif %}
-  {{ return(none) }}
+{# Helper macro: Get to_date from dbt variables #}
+{% macro get_to_date() %}
+  {{ return(var('to_date')) }}
 {% endmacro %}
 
 
@@ -156,13 +136,9 @@
               {# Initial run - count all rows from Parquet files #}
               {{ count_and_log_parquet(run_type='full') }}
             {% else %}
-              {# Incremental run - count rows in reprocess window (7 days) #}
-              {% set max_date = get_max_date(model, 'order_date') %}
-              {% set reprocess_from = calculate_reprocess_from(max_date, 7) %}
-              
-              {% if reprocess_from %}
-                {{ count_and_log_parquet(reprocess_from) }}
-              {% endif %}
+              {# Incremental run - count rows in reprocess window using from_date variable #}
+              {% set reprocess_from = var('from_date') %}
+              {{ count_and_log_parquet(reprocess_from) }}
             {% endif %}
           {% else %}
             {# Full refresh staging model - count all rows from Parquet files #}
@@ -181,14 +157,9 @@
               {# Initial run - count all rows from staging model #}
               {{ count_and_log_staging(staging_model, run_type='full') }}
             {% else %}
-              {# Incremental run - count rows in reprocess window (14 days) #}
-              {% set max_date = get_max_date(model, 'order_date') %}
-              {% set reprocess_window = var('reprocess_window_days', 14) %}
-              {% set reprocess_from = calculate_reprocess_from(max_date, reprocess_window) %}
-              
-              {% if reprocess_from %}
-                {{ count_and_log_staging(staging_model, reprocess_from) }}
-              {% endif %}
+              {# Incremental run - count rows in reprocess window using from_date variable #}
+              {% set reprocess_from = var('from_date') %}
+              {{ count_and_log_staging(staging_model, reprocess_from) }}
             {% endif %}
           {% else %}
             {# Full refresh - count rows from staging model #}

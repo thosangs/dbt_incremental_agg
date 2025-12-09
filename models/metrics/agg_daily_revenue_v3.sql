@@ -22,21 +22,15 @@
 -- and you want to balance freshness with compute efficiency.
 
 {% if is_incremental() %}
-WITH params AS (
-    SELECT (
-        COALESCE((SELECT MAX(order_date) FROM {{ this }}), DATE '1900-01-01')
-        - INTERVAL {{ var('reprocess_window_days', 14) }} DAYS
-    ) AS reprocess_from
-),
-
-new_aggregates AS (
+WITH new_aggregates AS (
     SELECT
         order_date,
         SUM(revenue) AS daily_revenue,
+        SUM(revenue) AS running_revenue,
         COUNT(DISTINCT order_id) AS daily_orders,
         COUNT(DISTINCT buyer_id) AS daily_buyers
     FROM {{ ref('stg_orders_v2') }}
-    WHERE order_date >= (SELECT reprocess_from FROM params)
+    WHERE order_date >= '{{ var("from_date") }}'
     GROUP BY 1
 ),
 
@@ -45,9 +39,10 @@ existing_data AS (
         order_date,
         daily_revenue,
         daily_orders,
-        daily_buyers
+        daily_buyers,
+        running_revenue
     FROM {{ this }}
-    WHERE order_date < (SELECT reprocess_from FROM params)
+    WHERE order_date = DATE_SUB(DATE('{{ var("from_date") }}'), INTERVAL 1 DAY)
 ),
 
 combined AS (
@@ -61,7 +56,7 @@ SELECT
     daily_revenue,
     daily_orders,
     daily_buyers,
-    SUM(daily_revenue) OVER (
+    SUM(running_revenue) OVER (
         ORDER BY order_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue
 FROM combined

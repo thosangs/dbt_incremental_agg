@@ -21,4 +21,5 @@ models:
       +on_schema_change: append_new_columns
 
 vars:
-  reprocess_window_days: 14
+  from_date: '{{ (modules.datetime.datetime.now() - modules.datetime.timedelta(days=14)).strftime("%Y-%m-%d")}}'
+  to_date: '{{modules.datetime.date.today().strftime("%Y-%m-%d")}}'
