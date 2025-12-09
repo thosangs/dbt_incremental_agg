@@ -11,8 +11,8 @@ help: ## Show this help
 
 up: ## Start dbt container
 	@echo "[up] Creating runtime dirs"
-	@mkdir -p data/warehouse data/raw data/partitioned
-	@chmod -R 777 data/warehouse data/raw data/partitioned || true
+	@mkdir -p data/warehouse data/partitioned
+	@chmod -R 777 data/warehouse data/partitioned || true
 	@echo "[docker] Starting dbt container"
 	docker compose up -d dbt
 	@echo "[docker] dbt container ready"

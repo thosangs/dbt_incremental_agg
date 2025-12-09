@@ -27,7 +27,7 @@
 **The Magic Line:**
 
 ```sql
-WHERE trip_date >= (SELECT MAX(trip_date) FROM {{ this }}) - INTERVAL 14 DAYS
+WHERE order_date >= (SELECT MAX(order_date) FROM {{ this }}) - INTERVAL 14 DAYS
 ```
 
 That's it. That's the line. One line. $1K saved. 🎯
@@ -306,7 +306,7 @@ graph LR
 # Build images and prepare runtime dirs
 make setup
 
-# Start dbt container (automatically downloads and repartitions July-October 2025 data)
+# Start dbt container (automatically generates store transaction data)
 make up
 
 # Build models
@@ -370,7 +370,7 @@ This project leverages DuckDB's superpowers:
 - **Merge Strategy**: DuckDB's `merge` statement efficiently handles incremental updates with sliding window (no more manual upserts! 🎉)
 - **Parquet Reading**: Native support for reading Parquet files directly with `read_parquet()` function (no Spark needed! ✨)
 - **Parquet Writing**: Native support for writing Parquet files with `COPY ... TO` statement (partitioning made easy 🗂️)
-- **Data Repartitioning**: Efficient repartitioning of monthly Parquet files into daily partitions using DuckDB (because daily partitions = faster queries 🚀)
+- **Data Generation**: Efficient generation and partitioning of store transaction data into daily partitions using DuckDB (because daily partitions = faster queries 🚀)
 - **Python Models**: Native support for Python models that execute in the same process as dbt (no external cluster needed! 🐍)
   - **Pandas UDFs**: Row-level transformations using pandas `.apply()` (familiar pandas API)
   - **PyArrow UDFs**: Batch processing using PyArrow RecordBatchReader for memory-efficient operations (handle datasets larger than RAM! 💪)
@@ -458,7 +458,6 @@ docker compose exec -T dbt python scripts/generate_store_transactions.py \
 - **Insufficient disk space**: Ensure sufficient disk space (because data takes space! 💾)
 - **Python model errors**: Ensure all required packages are in `requirements.txt` (holidays, pandas, pyarrow, duckdb) - Python dependencies, amirite? 🐍
 - **Connection errors**: Ensure dbt container is running (`make up`) - containers gotta run! 🐳
-- **Monthly files not deleted**: Check that repartitioning completed successfully. Use `--keep-monthly` flag to preserve monthly files (if you're a hoarder 📦)
 
 ---
 
