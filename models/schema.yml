@@ -1,80 +1,85 @@
 version: 2
 
 models:
-  - name: stg_trips_v1
-    description: Staging model for NYC Yellow Taxi trips from parquet files (view - always fresh)
+  - name: stg_orders_v1
+    description: Staging model for Store Transactions from parquet files (view - always fresh)
     columns:
-      - name: trip_id
-        tests: [not_null, unique]
-      - name: trip_ts
+      - name: order_id
         tests: [not_null]
-      - name: trip_date
+      - name: buyer_id
         tests: [not_null]
-      - name: vendor_id
+      - name: order_date
         tests: [not_null]
-      - name: total_amount
+      - name: order_timestamp
         tests: [not_null]
-      - name: fare_amount
-      - name: tip_amount
-      - name: tolls_amount
-      - name: passenger_count
-      - name: trip_distance
+      - name: product_id
+        tests: [not_null]
+      - name: quantity
+        tests: [not_null]
+      - name: unit_price
+        tests: [not_null]
+      - name: revenue
+        tests: [not_null]
+      - name: payment_method
+        tests: [not_null]
 
-  - name: stg_trips_v2
-    description: Incremental staging model for NYC Yellow Taxi trips (v2 - incremental events)
+  - name: stg_orders_v2
+    description: Incremental staging model for Store Transactions (v2 - incremental events)
     columns:
-      - name: trip_id
-        tests: [not_null, unique]
-      - name: trip_ts
+      - name: order_id
         tests: [not_null]
-      - name: trip_date
+      - name: buyer_id
         tests: [not_null]
-      - name: vendor_id
+      - name: order_date
         tests: [not_null]
-      - name: total_amount
+      - name: order_timestamp
         tests: [not_null]
-      - name: fare_amount
-      - name: tip_amount
-      - name: tolls_amount
-      - name: passenger_count
-      - name: trip_distance
+      - name: product_id
+        tests: [not_null]
+      - name: quantity
+        tests: [not_null]
+      - name: unit_price
+        tests: [not_null]
+      - name: revenue
+        tests: [not_null]
+      - name: payment_method
+        tests: [not_null]
 
   - name: agg_daily_revenue_v1
     description: Version 1 - Full batch daily revenue aggregation (table refresh)
     columns:
-      - name: trip_date
+      - name: order_date
         tests: [not_null]
       - name: daily_revenue
         tests: [not_null]
-      - name: daily_trips
+      - name: daily_orders
         tests: [not_null]
-      - name: daily_passengers
       - name: running_revenue
         tests: [not_null]
 
   - name: agg_daily_revenue_v2
     description: Version 2 - Incremental event processing (incremental staging, full aggregation)
     columns:
-      - name: trip_date
+      - name: order_date
         tests: [not_null]
       - name: daily_revenue
         tests: [not_null]
-      - name: daily_trips
+      - name: daily_orders
         tests: [not_null]
-      - name: daily_passengers
       - name: running_revenue
         tests: [not_null]
 
   - name: agg_daily_revenue_v3
-    description: Version 3 - Incremental aggregation with partition overwrite (recommended)
+    description: Version 3 - Incremental aggregation with sliding window (recommended)
     columns:
-      - name: trip_date
+      - name: order_date
         tests: [not_null]
       - name: daily_revenue
         tests: [not_null]
-      - name: daily_trips
+      - name: daily_orders
         tests: [not_null]
-      - name: daily_passengers
+      - name: daily_buyers
+        tests: [not_null]
       - name: running_revenue
         tests: [not_null]
 
@@ -84,7 +89,7 @@ models:
       Enriches daily revenue aggregation with US holiday information using pandas .apply() for row-level transformations.
       Best for smaller datasets or when simplicity is preferred.
     columns:
-      - name: trip_date
+      - name: order_date
         tests: [not_null]
       - name: is_holiday
         description: Boolean flag indicating if the date is a US holiday
@@ -92,9 +97,8 @@ models:
         description: Name of the holiday if the date is a US holiday, null otherwise
       - name: daily_revenue
         tests: [not_null]
-      - name: daily_trips
+      - name: daily_orders
         tests: [not_null]
-      - name: daily_passengers
       - name: running_revenue
         tests: [not_null]
 
@@ -104,7 +108,7 @@ models:
       Enriches daily revenue aggregation with US holiday information using PyArrow RecordBatchReader for batch processing.
       Memory-efficient for large datasets, processes data in chunks (batches of 100k rows).
     columns:
-      - name: trip_date
+      - name: order_date
         tests: [not_null]
       - name: is_holiday
         description: Boolean flag indicating if the date is a US holiday
@@ -112,8 +116,7 @@ models:
         description: Name of the holiday if the date is a US holiday, null otherwise
       - name: daily_revenue
         tests: [not_null]
-      - name: daily_trips
+      - name: daily_orders
         tests: [not_null]
-      - name: daily_passengers
       - name: running_revenue
         tests: [not_null]

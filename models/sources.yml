@@ -3,6 +3,6 @@ version: 2
 sources:
   - name: partitioned
     tables:
-      - name: yellow_trips
+      - name: store_transactions
         config:
           external_location: "read_parquet('/data/partitioned/**/*.parquet')"

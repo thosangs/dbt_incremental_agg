@@ -12,7 +12,7 @@ snapshot-paths: ["snapshots"]
 models:
   pycon25_duckdb_demo:
     +materialized: view
-    +post-hook:
+    +pre-hook:
       - "{{ log_processed_data(this) }}"
     staging:
       +materialized: view

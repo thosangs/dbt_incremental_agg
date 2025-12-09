@@ -2,7 +2,7 @@
   config(
     materialized='incremental',
     incremental_strategy='merge',
-    unique_key='trip_date',
+    unique_key='order_date',
     on_schema_change='append_new_columns'
   )
 }}
@@ -24,30 +24,30 @@
 {% if is_incremental() %}
 WITH params AS (
     SELECT (
-        COALESCE((SELECT MAX(trip_date) FROM {{ this }}), DATE '1900-01-01')
+        COALESCE((SELECT MAX(order_date) FROM {{ this }}), DATE '1900-01-01')
         - INTERVAL {{ var('reprocess_window_days', 14) }} DAYS
     ) AS reprocess_from
 ),
 
 new_aggregates AS (
     SELECT
-        trip_date,
-        SUM(total_amount) AS daily_revenue,
-        COUNT(*) AS daily_trips,
-        SUM(passenger_count) AS daily_passengers
-    FROM {{ ref('stg_trips_v2') }}
-    WHERE trip_date >= (SELECT reprocess_from FROM params)
+        order_date,
+        SUM(revenue) AS daily_revenue,
+        COUNT(DISTINCT order_id) AS daily_orders,
+        COUNT(DISTINCT buyer_id) AS daily_buyers
+    FROM {{ ref('stg_orders_v2') }}
+    WHERE order_date >= (SELECT reprocess_from FROM params)
     GROUP BY 1
 ),
 
 existing_data AS (
     SELECT
-        trip_date,
+        order_date,
         daily_revenue,
-        daily_trips,
-        daily_passengers
+        daily_orders,
+        daily_buyers
     FROM {{ this }}
-    WHERE trip_date < (SELECT reprocess_from FROM params)
+    WHERE order_date < (SELECT reprocess_from FROM params)
 ),
 
 combined AS (
@@ -57,37 +57,37 @@ combined AS (
 )
 
 SELECT
-    trip_date,
+    order_date,
     daily_revenue,
-    daily_trips,
-    daily_passengers,
+    daily_orders,
+    daily_buyers,
     SUM(daily_revenue) OVER (
-        ORDER BY trip_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ORDER BY order_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue
 FROM combined
-ORDER BY trip_date
+ORDER BY order_date
 
 {% else %}
 
 WITH base AS (
     SELECT
-        trip_date,
-        SUM(total_amount) AS daily_revenue,
-        COUNT(*) AS daily_trips,
-        SUM(passenger_count) AS daily_passengers
-    FROM {{ ref('stg_trips_v2') }}
+        order_date,
+        SUM(revenue) AS daily_revenue,
+        COUNT(DISTINCT order_id) AS daily_orders,
+        COUNT(DISTINCT buyer_id) AS daily_buyers
+    FROM {{ ref('stg_orders_v2') }}
     GROUP BY 1
 )
 SELECT
-    trip_date,
+    order_date,
     daily_revenue,
-    daily_trips,
-    daily_passengers,
+    daily_orders,
+    daily_buyers,
     SUM(daily_revenue) OVER (
-        ORDER BY trip_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ORDER BY order_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_revenue
 FROM base
-ORDER BY trip_date
+ORDER BY order_date
 
 {% endif %}
 

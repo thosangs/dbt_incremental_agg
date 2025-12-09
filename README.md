@@ -1,53 +1,128 @@
-### Incremental Aggregations Journey: dbt + DuckDB (PyCon 2025 Talk Demo)
+# 🚀 1 Line that saves $1K: Incremental Aggregations with dbt + DuckDB
+
+**PyCon 2025 Talk Demo**
+
+> **TL;DR**: One line of SQL can save you $1,000/month in BigQuery costs. This repo shows you how. 🎯
+
+## 💰 The Cost Savings Story
+
+**The Problem:** Calculating daily overall users (running total) requires scanning entire history every day.
+
+**Before (Full Batch):**
+
+- Scans: **5 TB per day** 📊
+- Cost: **$6.25/TB × 5 TB = $31.25/day** 💸
+- Monthly: **~$937.50** 😱
+- **Why?** Need to recalculate running totals from scratch
+
+**After (Incremental Aggregation):**
+
+- Scans: **~200 GB per day** (only 14-day window) ⚡
+- Cost: **$6.25/TB × 0.2 TB = $1.25/day** 🎉
+- Monthly: **~$37.50** ✨
+- **Why?** Only reprocess sliding window, preserve older data
+
+**Savings: ~$900/month ≈ $1,000/month** 💰
+
+**The Magic Line:**
+
+```sql
+WHERE trip_date >= (SELECT MAX(trip_date) FROM {{ this }}) - INTERVAL 14 DAYS
+```
+
+That's it. That's the line. One line. $1K saved. 🎯
 
 This project demonstrates a progressive journey through incremental data processing patterns using dbt and DuckDB. It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with sliding window using DuckDB's merge strategy.
 
-The repo is optimized for live demos: everything runs locally in Docker, requires no external cloud credentials, and can be reset quickly.
+**The repo is optimized for live demos**: everything runs locally in Docker, requires no external cloud credentials, and can be reset quickly. No credit card required! 💳✨
 
 ---
 
-### What's inside
+### What's inside 🎁
 
 - **dbt project** targeting DuckDB with staging and incremental aggregation models
-- **Python models** demonstrating DuckDB Python API with two UDF approaches (Pandas and PyArrow)
-- **Three progressive demos** showing the evolution from full batch to sophisticated incremental patterns
-- **NYC Yellow Taxi Trip Data** from the NYC Taxi & Limousine Commission (TLC) - real-world time-series data
-- **Download and repartition script** that downloads monthly Parquet files, repartitions them into daily files using DuckDB, and cleans up old monthly files
-- **DuckDB** embedded database for fast analytical queries
-- **Docker Compose** orchestration for the entire stack
+- **Python models** 🐍 demonstrating DuckDB Python API with PyArrow batch processing (v1, v2, v3)
+- **SQL models** for comparison - same patterns, different syntax
+- **Three progressive demos** showing the evolution from "scan everything" to "scan smart" 💡
+- **Generated Store Transaction Data** 🛒 - Simulated store data (orders, revenue, buyers) over 90 days with realistic patterns
+- **Data generation script** that generates realistic store transaction data and exports as Hive-partitioned Parquet files using DuckDB
+- **DuckDB** embedded database for fast analytical queries (no external services needed!)
+- **Docker Compose** orchestration for the entire stack (because who likes dependency hell? 😅)
 
 ---
 
-### The Journey: Three Progressive Demos
+### The Journey: Three Progressive Demos 🎬
+
+```mermaid
+graph LR
+    subgraph V1["Demo 01: Full Batch 🔥"]
+        V1_Staging[Staging: View<br/>Reads ALL]
+        V1_Agg[Aggregation: Table<br/>Rebuilds ALL]
+        V1_Cost[$31.25/day]
+        V1_Staging --> V1_Agg --> V1_Cost
+    end
+
+    subgraph V2["Demo 02: Hybrid ⚡"]
+        V2_Staging[Staging: Incremental<br/>Last 7 days ✅]
+        V2_Agg[Aggregation: Table<br/>Rebuilds ALL ❌]
+        V2_Cost[$31.25/day]
+        V2_Staging --> V2_Agg --> V2_Cost
+    end
+
+    subgraph V3["Demo 03: Full Incremental 🎯"]
+        V3_Staging[Staging: Incremental<br/>Last 7 days ✅]
+        V3_Agg[Aggregation: Incremental<br/>Sliding window ✅]
+        V3_Cost[$1.25/day]
+        V3_Staging --> V3_Agg --> V3_Cost
+    end
+
+    V1 -->|Incremental Staging| V2
+    V2 -->|Incremental Aggregation| V3
+
+    style V1 fill:#ffcccc
+    style V2 fill:#fff4cc
+    style V3 fill:#ccffcc
+```
 
 #### Demo 01: Full Batch Processing
 
 **Pattern**: Full table refresh on every run  
 **Use case**: Small datasets, infrequent updates  
-**Trade-off**: Simple but inefficient for large datasets
+**Trade-off**: Simple but inefficient for large datasets  
+**Mood**: 😊 "It works!" → 😰 "Why is this so slow?!" → 💸 "Why is this so expensive?!"
 
-#### Demo 02: Incremental Event Processing
+#### Demo 02: Incremental Event Processing (Hybrid)
 
-**Pattern**: Incremental event ingestion with full aggregation refresh  
-**Use case**: Event streams with continuous new data  
-**Trade-off**: Efficient event processing but doesn't handle late-arriving events well
+**Pattern**: **Hybrid** - Incremental staging, full aggregation refresh  
+**Use case**: When staging is large but aggregation is small  
+**Trade-off**: Efficient staging, but aggregation rebuilds everything  
+**Mood**: 🎉 "Staging is incremental!" → 😅 "But aggregation still scans everything..."
 
-#### Demo 03: Incremental Aggregation with Sliding Window
+#### Demo 03: Incremental Aggregation with Sliding Window ⭐
 
-**Pattern**: Incremental aggregation using DuckDB's `merge` strategy with sliding window  
+**Pattern**: **Full Incremental** - Incremental staging + Incremental aggregation  
 **Use case**: Time-series aggregations with late-arriving events  
-**Trade-off**: Most sophisticated, handles late data correctly, leverages DuckDB's merge capabilities
+**Trade-off**: Most sophisticated, handles late data correctly, leverages DuckDB's merge capabilities  
+**Mood**: 🚀 "Perfect! Both staging AND aggregation are incremental!"
 
-Each demo includes its own models and README explaining the pattern, trade-offs, and when to use it.
+**The Magic Line:**
+
+```sql
+WHERE order_date >= (SELECT MAX(order_date) FROM {{ this }}) - INTERVAL 14 DAYS
+```
+
+**That's it. That's the line that saves $1K.** ✨
+
+Each demo includes both SQL and Python (PyArrow) models, so you can see the same pattern in both languages!
 
 ---
 
-### Requirements
+### Requirements 📋
 
-- Docker (Desktop or compatible)
-- Docker Compose
-- `make` command-line utility
-- macOS/Linux (tested), Windows WSL works too
+- **Docker** (Desktop or compatible) - because containers are life 🐳
+- **Docker Compose** - orchestration made easy
+- **`make`** command-line utility - for those sweet, sweet shortcuts
+- **macOS/Linux** (tested), Windows WSL works too (we don't discriminate! 🪟)
 
 ---
 
@@ -74,14 +149,11 @@ make up
 
 This starts the dbt container with DuckDB embedded. No external services needed!
 
-4. **Download, repartition, and run a demo**
+4. **Run a demo**
+
+The `make up` command automatically generates store transaction data for the last 90 days. This creates realistic store data (orders, revenue, buyers) and exports it as Hive-partitioned Parquet files using DuckDB.
 
 ```bash
-# Download and repartition NYC Yellow Taxi data (default: Sept-Oct 2025)
-# This downloads monthly files, repartitions them into daily files using DuckDB,
-# and automatically deletes the monthly files to save space
-make download-data
-
 # Run Demo 01: Full Batch
 make demo-01
 
@@ -108,49 +180,50 @@ docker compose exec dbt duckdb /data/warehouse/analytics.duckdb
 Then run SQL:
 
 ```sql
-SELECT * FROM analytics.stg_trips_v1 LIMIT 100;
-SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date;
-SELECT trip_date, daily_revenue, daily_trips FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
+SELECT * FROM analytics.stg_orders_v1 LIMIT 100;
+SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY order_date;
+SELECT order_date, daily_revenue, daily_orders FROM analytics.agg_daily_revenue_v3 ORDER BY order_date DESC LIMIT 30;
 ```
 
 ---
 
 ### Demo workflow: The Journey
 
-#### Step 1: Start with Full Batch (Version 1)
+#### Step 1: Start with Full Batch (Version 1) 🔥
 
 ```bash
 make demo-01
 ```
 
-**What happens**: Every run rebuilds tables from scratch. Simple but inefficient.
+**What happens**: Every run rebuilds tables from scratch. Simple but inefficient.  
+**Feels like**: Running `rm -rf node_modules && npm install` every day 😅
 
-#### Step 2: Move to Incremental Events (Version 2)
+#### Step 2: Move to Incremental Events (Version 2) ⚡
 
 ```bash
 make demo-02
 ```
 
-**What happens**: Only new events are processed incrementally. More efficient, but late-arriving events are missed.
+**What happens**: Staging is incremental (processes last 7 days), but aggregation still rebuilds everything from staging.  
+**Feels like**: Your staging table is smart, but aggregation still reads everything from it 😅  
+**Key insight**: Incremental staging doesn't help if aggregation reads the full staging table!
 
-#### Step 3: Advanced Incremental Aggregation (Version 3)
+#### Step 3: Advanced Incremental Aggregation (Version 3) 🎯
 
 ```bash
-# First run - downloads, repartitions, and processes Sept-Oct 2025 data
-make download-data
+# First run - make up automatically generates store transaction data
 make demo-03
 
-# Download and repartition older data to simulate late-arriving trips
-# (e.g., August 2025)
-docker compose exec -T dbt python scripts/download_and_repartition.py \
-  --start-year 2025 --start-month 8 --end-year 2025 --end-month 8 \
-  --raw-dir /data/raw --partitioned-dir /data/partitioned --skip-existing
+# Generate additional data to simulate late-arriving orders
+docker compose exec -T dbt python scripts/generate_store_transactions.py \
+  --days 30 --partitioned-dir /data/partitioned
 
 # Re-run - only affected date ranges are reprocessed using sliding window
 make run
 ```
 
-**What happens**: Uses DuckDB's `merge` strategy with a sliding window to efficiently reprocess only affected date ranges, handling late-arriving events correctly. When you download older months (e.g., August 2025), those trips will update the historical aggregations within the sliding window.
+**What happens**: Both staging AND aggregation are incremental! Staging processes last 7 days, aggregation reprocesses last 14 days sliding window. Uses DuckDB's `merge` strategy to efficiently update only affected date ranges, handling late-arriving events correctly. When you generate additional data, those orders will update the historical aggregations within the sliding window.  
+**Feels like**: Finally, both layers are smart! Staging is incremental AND aggregation is incremental! 🧠✨
 
 ---
 
@@ -168,20 +241,21 @@ make run
 │   ├── schema.yml                # Model documentation and tests
 │   ├── sources.yml               # Source definitions for parquet files
 │   ├── staging/
-│   │   ├── stg_trips_v1.sql        # Staging model (view - used by v1 & v3)
-│   │   └── stg_trips_v2.sql        # Incremental staging (used by v2)
+│   │   ├── stg_orders_v1.sql        # Staging model (view - used by v1)
+│   │   └── stg_orders_v2.sql        # Incremental staging (used by v2 & v3)
 │   └── metrics/
-│       ├── agg_daily_revenue_v1.sql                        # Version 1: Full batch
-│       ├── agg_daily_revenue_v2.sql                        # Version 2: Incremental events
-│       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation (recommended)
-│       ├── agg_daily_revenue_with_holidays_pandas.py      # Python model with Pandas UDFs
-│       └── agg_daily_revenue_with_holidays_pyarrow.py     # Python model with PyArrow UDFs
+│       ├── agg_daily_revenue_v1.sql                        # Version 1: Full batch (SQL)
+│       ├── agg_daily_revenue_v2.sql                        # Version 2: Incremental events (SQL)
+│       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation (SQL, recommended)
+│       ├── agg_daily_revenue_py_v1.py                      # Version 1: Full batch (Python/PyArrow) 🐍
+│       ├── agg_daily_revenue_py_v2.py                      # Version 2: Incremental events (Python/PyArrow) 🐍
+│       ├── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
+│       ├── agg_daily_revenue_with_holidays_pandas.py      # Bonus: Python model with Pandas UDFs
+│       └── agg_daily_revenue_with_holidays_pyarrow.py     # Bonus: Python model with PyArrow UDFs
 ├── scripts/
-│   ├── download_nyc_taxi_data.py          # Legacy: Download only script
-│   └── download_and_repartition.py        # Download, repartition, and cleanup script
+│   └── generate_store_transactions.py        # Generate store transaction data script
 ├── data/                         # Created at runtime
-│   ├── raw/                      # Temporary: Monthly parquet files (deleted after repartitioning)
-│   ├── partitioned/              # Daily partitioned parquet files (YYYY/MM/DD/*.parquet)
+│   ├── partitioned/              # Daily partitioned parquet files (year=YYYY/month=MM/date=DD/*.parquet)
 │   └── warehouse/                # DuckDB database file (analytics.duckdb)
 ├── requirements.txt              # Python dependencies
 └── README.md
@@ -190,6 +264,32 @@ make run
 ---
 
 ### dbt + DuckDB details
+
+```mermaid
+graph LR
+    subgraph Sources["📥 Sources"]
+        Parquet[Parquet Files<br/>/data/partitioned]
+    end
+
+    subgraph dbt["🛠️ dbt Models"]
+        Staging[Staging Models<br/>stg_orders_v1/v2]
+        Metrics[Metrics Models<br/>agg_daily_revenue_v1/v2/v3]
+        Python[Python Models<br/>agg_daily_revenue_py_v1/v2/v3]
+    end
+
+    subgraph DuckDB["🦆 DuckDB"]
+        DB[(analytics.duckdb<br/>File-based)]
+    end
+
+    Parquet -->|source| Staging
+    Staging -->|ref| Metrics
+    Staging -->|ref| Python
+    Metrics -->|materialize| DB
+    Python -->|materialize| DB
+
+    style dbt fill:#ff6b6b,color:#fff
+    style DuckDB fill:#ffd93d
+```
 
 - **Profiles**: Stored locally under `profiles/profiles.yml` for portability
 - **Storage**: DuckDB database file at `data/warehouse/analytics.duckdb`
@@ -206,25 +306,20 @@ make run
 # Build images and prepare runtime dirs
 make setup
 
-# Start dbt container
+# Start dbt container (automatically downloads and repartitions July-October 2025 data)
 make up
-
-# Download and repartition NYC taxi data (default: Sept-Oct 2025)
-# Downloads monthly files, repartitions into daily files using DuckDB, deletes monthly files
-make download-data
 
 # Build models
 make run
 
 # Run specific demo version
-make demo-01  # Version 1: Full batch (stg_trips_v1 + agg_daily_revenue_v1)
-make demo-02  # Version 2: Incremental events (stg_trips_v2 + agg_daily_revenue_v2)
-make demo-03  # Version 3: Incremental aggregation (stg_trips_v1 + agg_daily_revenue_v3)
+make demo-01  # Version 1: Full batch (stg_orders_v1 + agg_daily_revenue_v1)
+make demo-02  # Version 2: Incremental events (stg_orders_v2 + agg_daily_revenue_v2)
+make demo-03  # Version 3: Incremental aggregation (stg_orders_v2 + agg_daily_revenue_v3)
 
-# Download and repartition additional data (e.g., for late-arriving data demo)
-docker compose exec -T dbt python scripts/download_and_repartition.py \
-  --start-year 2025 --start-month 8 --end-year 2025 --end-month 8 \
-  --raw-dir /data/raw --partitioned-dir /data/partitioned --skip-existing
+# Generate additional data (e.g., for late-arriving data demo)
+docker compose exec -T dbt python scripts/generate_store_transactions.py \
+  --days 30 --partitioned-dir /data/partitioned
 make run
 
 # Run dbt tests
@@ -242,118 +337,142 @@ make clean
 
 ---
 
-### DuckDB-specific features
+### DuckDB-specific features 🦆
 
-This project leverages DuckDB's capabilities:
+```mermaid
+graph TB
+    subgraph DuckDB["🦆 DuckDB Features"]
+        Merge[Merge Strategy<br/>Incremental Updates]
+        Parquet[Parquet Native<br/>Read/Write]
+        Python[Python Models<br/>PyArrow/Pandas]
+        Embedded[Embedded DB<br/>No External Services]
+    end
 
-- **Merge Strategy**: DuckDB's `merge` statement efficiently handles incremental updates with sliding window
-- **Parquet Reading**: Native support for reading Parquet files directly with `read_parquet()` function
-- **Parquet Writing**: Native support for writing Parquet files with `COPY ... TO` statement
-- **Data Repartitioning**: Efficient repartitioning of monthly Parquet files into daily partitions using DuckDB
-- **Python Models**: Native support for Python models that execute in the same process as dbt
-  - **Pandas UDFs**: Row-level transformations using pandas `.apply()`
-  - **PyArrow UDFs**: Batch processing using PyArrow RecordBatchReader for memory-efficient operations
-- **Embedded Database**: No external services needed - DuckDB runs embedded in dbt
-- **Fast Analytics**: Optimized for analytical queries on columnar data
+    subgraph Benefits["✨ Benefits"]
+        Fast[Fast Queries]
+        Local[Local Dev]
+        Efficient[Memory Efficient]
+        Simple[Simple Setup]
+    end
+
+    Merge --> Fast
+    Parquet --> Fast
+    Python --> Efficient
+    Embedded --> Local
+    Embedded --> Simple
+
+    style DuckDB fill:#ffd93d
+    style Benefits fill:#95e1d3
+```
+
+This project leverages DuckDB's superpowers:
+
+- **Merge Strategy**: DuckDB's `merge` statement efficiently handles incremental updates with sliding window (no more manual upserts! 🎉)
+- **Parquet Reading**: Native support for reading Parquet files directly with `read_parquet()` function (no Spark needed! ✨)
+- **Parquet Writing**: Native support for writing Parquet files with `COPY ... TO` statement (partitioning made easy 🗂️)
+- **Data Repartitioning**: Efficient repartitioning of monthly Parquet files into daily partitions using DuckDB (because daily partitions = faster queries 🚀)
+- **Python Models**: Native support for Python models that execute in the same process as dbt (no external cluster needed! 🐍)
+  - **Pandas UDFs**: Row-level transformations using pandas `.apply()` (familiar pandas API)
+  - **PyArrow UDFs**: Batch processing using PyArrow RecordBatchReader for memory-efficient operations (handle datasets larger than RAM! 💪)
+- **Embedded Database**: No external services needed - DuckDB runs embedded in dbt (local development FTW! 🏠)
+- **Fast Analytics**: Optimized for analytical queries on columnar data (because speed matters ⚡)
 
 ---
 
-### Notes for the live demo
+### Notes for the live demo 🎤
 
-1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing
-2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts
-3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's merge strategy with sliding window
-4. **Show Python models**:
+1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing (the "it works but..." approach 😅)
+2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts (the "faster but..." approach ⚡)
+3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's merge strategy with sliding window (the "finally, it's perfect!" approach 🎯)
+4. **Show Python models** 🐍:
+   - `agg_daily_revenue_py_v1.py`, `agg_daily_revenue_py_v2.py`, `agg_daily_revenue_py_v3.py` - Same patterns in Python!
    - `agg_daily_revenue_with_holidays_pandas.py` - Demonstrates Pandas UDFs with `.apply()`
    - `agg_daily_revenue_with_holidays_pyarrow.py` - Demonstrates PyArrow batch processing UDFs
-5. **Show data repartitioning**: Demonstrate how `make download-data` uses DuckDB to repartition monthly files into daily partitions and clean up old files
+5. **Show data generation**: Demonstrate how `make up` uses DuckDB to generate store transaction data and export as Hive-partitioned Parquet files (because organization matters! 🗂️)
 6. **Query results** using DuckDB CLI:
    ```bash
    docker compose exec dbt duckdb /data/warehouse/analytics.duckdb
    ```
    Then:
    ```sql
-   SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY trip_date DESC LIMIT 30;
+   SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY order_date DESC LIMIT 30;
    ```
-7. **Emphasize**:
-   - How `is_incremental()` limits work to changed date ranges in sliding window
-   - DuckDB's `merge` strategy vs. simpler incremental approaches
-   - The trade-offs between simplicity and efficiency
-   - Real-world NYC taxi data demonstrates natural late-arriving patterns (data published ~2 months after collection)
-   - All versions are available side-by-side for easy comparison
-   - Python models work seamlessly with DuckDB (no external cluster needed)
+7. **Emphasize** 💡:
+   - How `is_incremental()` limits work to changed date ranges in sliding window (the magic line!)
+   - DuckDB's `merge` strategy vs. simpler incremental approaches (why it's better)
+   - The trade-offs between simplicity and efficiency (there's always a trade-off)
+   - Generated store transaction data demonstrates realistic patterns (variable volume, returning customers - just like production! 📊)
+   - All versions are available side-by-side for easy comparison (SQL vs Python, choose your weapon ⚔️)
+   - Python models work seamlessly with DuckDB (no external cluster needed - local development is back! 🏠)
 
 ---
 
-### Data Source
+### Data Source 📊
 
-This project uses **NYC Yellow Taxi Trip Data** from the [NYC Taxi & Limousine Commission (TLC)](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page). The data is publicly available in Parquet format and includes:
+This project uses **Generated Store Transaction Data** 🛒 - Simulated store data that mimics real-world e-commerce transactions. The data includes:
 
-- **Pickup/dropoff timestamps**: Perfect for time-series aggregation
-- **Fare amounts**: Revenue metrics for aggregation
-- **Vendor IDs**: Categorical dimensions
-- **Trip distances, passenger counts**: Additional metrics
-- **Monthly files**: Natural partitioning for incremental processing
+- **Order timestamps**: Perfect for time-series aggregation (because time is money! ⏰💰)
+- **Revenue amounts**: Revenue metrics for aggregation (show me the money! 💵)
+- **Buyer IDs**: Customer segmentation (because segmentation matters 📊)
+- **Product IDs, quantities**: Additional metrics (more data = more insights! 📈)
+- **Daily partitions**: Hive-style partitioning for efficient incremental processing (perfect for demos! 🎯)
 
-The data is published monthly with a ~2-month delay, making it ideal for demonstrating late-arriving data patterns.
+The data is generated with realistic patterns:
 
-### Data Download and Repartitioning
+- Variable volume: 5K-50K orders/day (weekends lower, weekdays higher)
+- Mix of returning and new customers
+- Multiple products per order
+- Various payment methods
 
-The `download_and_repartition.py` script provides a streamlined workflow:
+### Data Generation
 
-1. **Downloads** monthly Parquet files from NYC TLC's public repository
-2. **Repartitions** monthly files into daily Parquet files using DuckDB's native Parquet operations
-3. **Organizes** daily files in a `YYYY/MM/DD/` directory structure
-4. **Cleans up** by deleting original monthly files after successful repartitioning
+The `generate_store_transactions.py` script provides a streamlined workflow:
+
+1. **Generates** realistic store transaction data (orders, buyers, products) for the last 90 days
+2. **Exports** data as Hive-partitioned Parquet files using DuckDB's native Parquet operations
+3. **Organizes** files in a `year=YYYY/month=MM/date=DD/` directory structure (Hive-style partitioning)
 
 **Key Features:**
 
-- Uses DuckDB's `read_parquet()` and `COPY ... TO` for efficient processing
+- Uses DuckDB's `PARTITION_BY` for efficient Hive-style partitioning
 - Processes data in-memory with DuckDB (no intermediate storage needed)
-- Automatically deletes monthly files to save disk space
-- Can skip existing files with `--skip-existing` flag
-- Can preserve monthly files with `--keep-monthly` flag
+- Realistic patterns: variable volume, returning customers, product distribution
+- Configurable: number of days, base order volume, output directory
 
 **Example:**
 
 ```bash
-# Download and repartition Sept-Oct 2025 (default)
-make download-data
-
-# Custom date range with options
-docker compose exec -T dbt python scripts/download_and_repartition.py \
-  --start-year 2025 --start-month 9 \
-  --end-year 2025 --end-month 10 \
-  --raw-dir /data/raw \
+# Generate last 90 days (default, happens automatically with make up)
+# For custom date range, use the script directly:
+docker compose exec -T dbt python scripts/generate_store_transactions.py \
+  --days 30 \
   --partitioned-dir /data/partitioned \
-  --keep-monthly  # Keep monthly files instead of deleting
+  --base-orders 15000  # Base orders per weekday
 ```
 
-### Troubleshooting
+### Troubleshooting 🔧
 
-- **DuckDB database locked**: Ensure only one dbt process is accessing the database at a time
-- **Parquet files not found**: Run `make download-data` to download and repartition NYC taxi data
-- **Download fails**: Check internet connection. Files are ~50-100MB each. Ensure sufficient disk space
-- **Repartitioning fails**: Ensure DuckDB is installed (`duckdb>=0.10.0` in requirements.txt)
-- **Python model errors**: Ensure all required packages are in `requirements.txt` (holidays, pandas, pyarrow, duckdb)
-- **Connection errors**: Ensure dbt container is running (`make up`)
-- **Monthly files not deleted**: Check that repartitioning completed successfully. Use `--keep-monthly` flag to preserve monthly files
-
----
-
-### Why DuckDB?
-
-- **Simplicity**: No external services needed - DuckDB runs embedded in dbt
-- **Python Models**: Native support for Python models without external clusters
-- **Fast Analytics**: Optimized for analytical queries on columnar data
-- **Merge Strategy**: Efficient incremental updates with sliding window support
-- **Local Development**: Perfect for local development and demos
-- **Parquet Native**: Direct support for reading and writing Parquet files without external tools
-- **Efficient Repartitioning**: Can easily repartition large Parquet files using native SQL operations
-- **Memory Efficient**: PyArrow batch processing allows handling datasets larger than available memory
+- **DuckDB database locked**: Ensure only one dbt process is accessing the database at a time (sharing is caring, but not for databases! 🔒)
+- **Parquet files not found**: Run `make up` to generate store transaction data (happens automatically, but sometimes things go wrong 😅)
+- **Generation fails**: Ensure DuckDB and numpy are installed (`duckdb>=0.10.0`, `numpy>=1.24.0` in requirements.txt) - check your `requirements.txt`!
+- **Insufficient disk space**: Ensure sufficient disk space (because data takes space! 💾)
+- **Python model errors**: Ensure all required packages are in `requirements.txt` (holidays, pandas, pyarrow, duckdb) - Python dependencies, amirite? 🐍
+- **Connection errors**: Ensure dbt container is running (`make up`) - containers gotta run! 🐳
+- **Monthly files not deleted**: Check that repartitioning completed successfully. Use `--keep-monthly` flag to preserve monthly files (if you're a hoarder 📦)
 
 ---
 
 ### License
 
 This project is licensed under the MIT License.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Store transaction data** - Generated realistic data for demos 🛒
+- **dbt Labs** for making data engineering accessible 🛠️
+- **DuckDB** for being fast, free, and embedded 🦆
+- **You** for reading this far! 🎉
+
+**Made with ❤️ for PyCon 2025**
