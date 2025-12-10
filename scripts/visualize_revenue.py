@@ -63,7 +63,7 @@ def _(conn):
         daily_orders,
         daily_buyers,
         running_revenue
-    FROM analytics.agg_daily_revenue_v3
+    FROM analytics.analytics.agg_daily_revenue_v3
     ORDER BY order_date
     """
     df = conn.execute(query).df()
@@ -110,31 +110,31 @@ def _(mo):
 @app.cell
 def _(df, mdates, plt):
     # Plot daily revenue over time
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig1, ax1 = plt.subplots(figsize=(14, 6))
 
-    ax.plot(
+    ax1.plot(
         df["order_date"],
         df["daily_revenue"],
         linewidth=2,
         color="#2ecc71",
         label="Daily Revenue",
     )
-    ax.fill_between(df["order_date"], df["daily_revenue"], alpha=0.3, color="#2ecc71")
+    ax1.fill_between(df["order_date"], df["daily_revenue"], alpha=0.3, color="#2ecc71")
 
-    ax.set_xlabel("Date", fontsize=12)
-    ax.set_ylabel("Revenue ($)", fontsize=12)
-    ax.set_title("Daily Revenue Trend", fontsize=14, fontweight="bold")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    ax1.set_xlabel("Date", fontsize=12)
+    ax1.set_ylabel("Revenue ($)", fontsize=12)
+    ax1.set_title("Daily Revenue Trend", fontsize=14, fontweight="bold")
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
 
     # Format x-axis dates
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax1.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
     plt.xticks(rotation=45)
 
     plt.tight_layout()
-    ax
-    return (ax, fig)
+    ax1
+    return (ax1, fig1)
 
 
 @app.cell(hide_code=True)
@@ -148,9 +148,9 @@ def _(mo):
 @app.cell
 def _(df, mdates, plt):
     # Plot running revenue
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig2, ax2 = plt.subplots(figsize=(14, 6))
 
-    ax.plot(
+    ax2.plot(
         df["order_date"],
         df["running_revenue"],
         linewidth=2.5,
@@ -158,20 +158,20 @@ def _(df, mdates, plt):
         label="Running Revenue",
     )
 
-    ax.set_xlabel("Date", fontsize=12)
-    ax.set_ylabel("Cumulative Revenue ($)", fontsize=12)
-    ax.set_title("Running Revenue (Cumulative)", fontsize=14, fontweight="bold")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    ax2.set_xlabel("Date", fontsize=12)
+    ax2.set_ylabel("Cumulative Revenue ($)", fontsize=12)
+    ax2.set_title("Running Revenue (Cumulative)", fontsize=14, fontweight="bold")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
 
     # Format x-axis dates
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax2.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
     plt.xticks(rotation=45)
 
     plt.tight_layout()
-    ax
-    return (ax, fig)
+    ax2
+    return (ax2, fig2)
 
 
 @app.cell(hide_code=True)
@@ -185,46 +185,46 @@ def _(mo):
 @app.cell
 def _(df, mdates, plt):
     # Plot daily orders and buyers
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig3, (ax3, ax4) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
 
     # Daily Orders
-    ax1.plot(
+    ax3.plot(
         df["order_date"],
         df["daily_orders"],
         linewidth=2,
         color="#e74c3c",
         label="Daily Orders",
     )
-    ax1.fill_between(df["order_date"], df["daily_orders"], alpha=0.3, color="#e74c3c")
-    ax1.set_ylabel("Number of Orders", fontsize=12)
-    ax1.set_title("Daily Orders", fontsize=14, fontweight="bold")
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
+    ax3.fill_between(df["order_date"], df["daily_orders"], alpha=0.3, color="#e74c3c")
+    ax3.set_ylabel("Number of Orders", fontsize=12)
+    ax3.set_title("Daily Orders", fontsize=14, fontweight="bold")
+    ax3.grid(True, alpha=0.3)
+    ax3.legend()
 
     # Daily Buyers
-    ax2.plot(
+    ax4.plot(
         df["order_date"],
         df["daily_buyers"],
         linewidth=2,
         color="#9b59b6",
         label="Daily Buyers",
     )
-    ax2.fill_between(df["order_date"], df["daily_buyers"], alpha=0.3, color="#9b59b6")
-    ax2.set_xlabel("Date", fontsize=12)
-    ax2.set_ylabel("Number of Buyers", fontsize=12)
-    ax2.set_title("Daily Buyers", fontsize=14, fontweight="bold")
-    ax2.grid(True, alpha=0.3)
-    ax2.legend()
+    ax4.fill_between(df["order_date"], df["daily_buyers"], alpha=0.3, color="#9b59b6")
+    ax4.set_xlabel("Date", fontsize=12)
+    ax4.set_ylabel("Number of Buyers", fontsize=12)
+    ax4.set_title("Daily Buyers", fontsize=14, fontweight="bold")
+    ax4.grid(True, alpha=0.3)
+    ax4.legend()
 
     # Format x-axis dates
-    for ax in [ax1, ax2]:
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+    for _ax in [ax3, ax4]:
+        _ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        _ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
 
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
-    return (ax1, ax2, fig)
+    return (ax3, ax4, fig3)
 
 
 @app.cell(hide_code=True)
@@ -238,56 +238,62 @@ def _(mo):
 @app.cell
 def _(df, mdates, plt):
     # Create a comprehensive dashboard
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    fig4, axes_dashboard = plt.subplots(2, 2, figsize=(16, 10))
 
     # 1. Daily Revenue
-    axes[0, 0].plot(df["order_date"], df["daily_revenue"], linewidth=2, color="#2ecc71")
-    axes[0, 0].fill_between(
+    axes_dashboard[0, 0].plot(
+        df["order_date"], df["daily_revenue"], linewidth=2, color="#2ecc71"
+    )
+    axes_dashboard[0, 0].fill_between(
         df["order_date"], df["daily_revenue"], alpha=0.3, color="#2ecc71"
     )
-    axes[0, 0].set_title("Daily Revenue", fontweight="bold")
-    axes[0, 0].set_ylabel("Revenue ($)")
-    axes[0, 0].grid(True, alpha=0.3)
-    axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    axes[0, 0].tick_params(axis="x", rotation=45)
+    axes_dashboard[0, 0].set_title("Daily Revenue", fontweight="bold")
+    axes_dashboard[0, 0].set_ylabel("Revenue ($)")
+    axes_dashboard[0, 0].grid(True, alpha=0.3)
+    axes_dashboard[0, 0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    axes_dashboard[0, 0].tick_params(axis="x", rotation=45)
 
     # 2. Running Revenue
-    axes[0, 1].plot(
+    axes_dashboard[0, 1].plot(
         df["order_date"], df["running_revenue"], linewidth=2, color="#3498db"
     )
-    axes[0, 1].set_title("Running Revenue (Cumulative)", fontweight="bold")
-    axes[0, 1].set_ylabel("Cumulative Revenue ($)")
-    axes[0, 1].grid(True, alpha=0.3)
-    axes[0, 1].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    axes[0, 1].tick_params(axis="x", rotation=45)
+    axes_dashboard[0, 1].set_title("Running Revenue (Cumulative)", fontweight="bold")
+    axes_dashboard[0, 1].set_ylabel("Cumulative Revenue ($)")
+    axes_dashboard[0, 1].grid(True, alpha=0.3)
+    axes_dashboard[0, 1].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    axes_dashboard[0, 1].tick_params(axis="x", rotation=45)
 
     # 3. Daily Orders
-    axes[1, 0].plot(df["order_date"], df["daily_orders"], linewidth=2, color="#e74c3c")
-    axes[1, 0].fill_between(
+    axes_dashboard[1, 0].plot(
+        df["order_date"], df["daily_orders"], linewidth=2, color="#e74c3c"
+    )
+    axes_dashboard[1, 0].fill_between(
         df["order_date"], df["daily_orders"], alpha=0.3, color="#e74c3c"
     )
-    axes[1, 0].set_title("Daily Orders", fontweight="bold")
-    axes[1, 0].set_xlabel("Date")
-    axes[1, 0].set_ylabel("Number of Orders")
-    axes[1, 0].grid(True, alpha=0.3)
-    axes[1, 0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    axes[1, 0].tick_params(axis="x", rotation=45)
+    axes_dashboard[1, 0].set_title("Daily Orders", fontweight="bold")
+    axes_dashboard[1, 0].set_xlabel("Date")
+    axes_dashboard[1, 0].set_ylabel("Number of Orders")
+    axes_dashboard[1, 0].grid(True, alpha=0.3)
+    axes_dashboard[1, 0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    axes_dashboard[1, 0].tick_params(axis="x", rotation=45)
 
     # 4. Daily Buyers
-    axes[1, 1].plot(df["order_date"], df["daily_buyers"], linewidth=2, color="#9b59b6")
-    axes[1, 1].fill_between(
+    axes_dashboard[1, 1].plot(
+        df["order_date"], df["daily_buyers"], linewidth=2, color="#9b59b6"
+    )
+    axes_dashboard[1, 1].fill_between(
         df["order_date"], df["daily_buyers"], alpha=0.3, color="#9b59b6"
     )
-    axes[1, 1].set_title("Daily Buyers", fontweight="bold")
-    axes[1, 1].set_xlabel("Date")
-    axes[1, 1].set_ylabel("Number of Buyers")
-    axes[1, 1].grid(True, alpha=0.3)
-    axes[1, 1].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    axes[1, 1].tick_params(axis="x", rotation=45)
+    axes_dashboard[1, 1].set_title("Daily Buyers", fontweight="bold")
+    axes_dashboard[1, 1].set_xlabel("Date")
+    axes_dashboard[1, 1].set_ylabel("Number of Buyers")
+    axes_dashboard[1, 1].grid(True, alpha=0.3)
+    axes_dashboard[1, 1].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    axes_dashboard[1, 1].tick_params(axis="x", rotation=45)
 
     plt.tight_layout()
     plt.show()
-    return (axes, fig)
+    return (axes_dashboard, fig4)
 
 
 @app.cell(hide_code=True)

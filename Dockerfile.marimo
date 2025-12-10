@@ -21,5 +21,13 @@ COPY --link scripts/ ./scripts/
 EXPOSE 8080
 
 # Create a non-root user and switch to it
-RUN useradd -m app_user
+RUN useradd -m app_user && \
+    mkdir -p /home/app_user/.marimo && \
+    chown -R app_user:app_user /home/app_user/.marimo
+
 USER app_user
+
+# Set marimo cache directory to user's home directory (writable)
+ENV MARIMO_CACHE_DIR=/home/app_user/.marimo
+
+CMD [ "marimo", "run", "scripts/visualize_revenue.py", "--host", "0.0.0.0", "-p", "8080" ]

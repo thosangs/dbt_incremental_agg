@@ -21,6 +21,8 @@ services:
       - ./data:/data
     ports:
       - "8080:8080"
+    environment:
+      MARIMO_CACHE_DIR: /home/app_user/.marimo
     depends_on:
       - dbt
     command:
