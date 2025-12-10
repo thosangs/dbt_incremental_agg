@@ -10,7 +10,7 @@
 
 import marimo
 
-__generated_with = "0.17.4"
+__generated_with = "0.18.4"
 app = marimo.App()
 
 
@@ -30,27 +30,27 @@ def _():
     import matplotlib.pyplot as plt
     import pandas as pd
 
-    return (duckdb, datetime, mdates, pd, plt)
+    return duckdb, mdates, plt
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
     # 📊 Revenue Analytics Dashboard
-    
+
     This notebook visualizes daily revenue metrics from the DuckDB warehouse.
-    
+
     **Data Source**: `analytics.agg_daily_revenue_v3` (Incremental Aggregation with Sliding Window)
     """)
     return
 
 
 @app.cell
-def _():
+def _(duckdb):
     # Connect to DuckDB warehouse
     db_path = "/data/warehouse/analytics.duckdb"
-    conn = duckdb.connect(db_path)
-    return (conn, db_path)
+    conn = duckdb.connect(database=db_path)
+    return (conn,)
 
 
 @app.cell
@@ -67,14 +67,151 @@ def _(conn):
     ORDER BY order_date
     """
     df = conn.execute(query).df()
-    return (df, query)
+    return (df,)
+
+
+@app.cell
+def _(conn, mo):
+    _df = mo.sql(
+        f"""
+        SELECT
+            order_date,
+            SUM(revenue) AS daily_revenue,
+            SUM(revenue) AS running_revenue,
+            COUNT(DISTINCT order_id) AS daily_orders,
+            COUNT(DISTINCT buyer_id) AS daily_buyers
+        FROM "analytics"."analytics"."stg_orders_v2"
+        WHERE order_date >= '2025-11-26'
+        GROUP BY 1
+        ORDER BY 1
+        """,
+        engine=conn,
+    )
+    return
+
+
+@app.cell
+def _(conn, mo):
+    _df = mo.sql(
+        f"""
+        SELECT
+            order_date,
+            daily_revenue,
+            daily_orders,
+            daily_buyers,
+            running_revenue
+        FROM "analytics"."analytics"."agg_daily_revenue_v3"
+        WHERE order_date = DATE('2025-11-26') - INTERVAL '1' DAY
+        """,
+        engine=conn,
+    )
+    return
+
+
+@app.cell
+def _(conn, mo):
+    _df = mo.sql(
+        f"""
+        WITH new_aggregates AS (
+            SELECT
+                order_date,
+                SUM(revenue) AS daily_revenue,
+                SUM(revenue) AS running_revenue,
+                COUNT(DISTINCT order_id) AS daily_orders,
+                COUNT(DISTINCT buyer_id) AS daily_buyers
+            FROM "analytics"."analytics"."stg_orders_v2"
+            WHERE order_date >= '2025-11-26'
+            GROUP BY 1
+        ),
+
+        existing_data AS (
+            SELECT
+                order_date,
+                daily_revenue,
+                daily_orders,
+                daily_buyers,
+                running_revenue
+            FROM "analytics"."analytics"."agg_daily_revenue_v3"
+            WHERE order_date = DATE('2025-11-26') - INTERVAL '1' DAY
+        )
+
+        SELECT order_date, daily_revenue, running_revenue FROM existing_data
+        UNION ALL BY NAME
+        SELECT order_date, daily_revenue, running_revenue FROM new_aggregates
+        """,
+        engine=conn,
+    )
+    return
+
+
+@app.cell
+def _(conn, mo):
+    _df = mo.sql(
+        f"""
+        WITH new_aggregates AS (
+            SELECT
+                order_date,
+                SUM(revenue) AS daily_revenue,
+                SUM(revenue) AS running_revenue,
+                COUNT(DISTINCT order_id) AS daily_orders,
+                COUNT(DISTINCT buyer_id) AS daily_buyers
+            FROM "analytics"."analytics"."stg_orders_v2"
+            WHERE order_date >= '2025-11-26'
+            GROUP BY 1
+        ),
+
+        existing_data AS (
+            SELECT
+                order_date,
+                daily_revenue,
+                daily_orders,
+                daily_buyers,
+                running_revenue
+            FROM "analytics"."analytics"."agg_daily_revenue_v3"
+            WHERE order_date = DATE('2025-11-26') - INTERVAL '1' DAY
+        ),
+
+        combined AS (
+            SELECT * FROM new_aggregates
+            UNION ALL BY NAME
+            SELECT * FROM existing_data
+        )
+
+        SELECT
+            order_date,
+            daily_revenue,
+            daily_orders,
+            daily_buyers,
+            SUM(running_revenue) OVER (
+                ORDER BY order_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS running_revenue
+        FROM combined
+        ORDER BY order_date
+        """,
+        engine=conn,
+    )
+    return
+
+
+@app.cell
+def _(conn, mo):
+    _df = mo.sql(
+        f"""
+        SELECT
+            order_date,
+            running_revenue
+        FROM "analytics"."analytics"."agg_daily_revenue_v3"
+        """,
+        engine=conn,
+    )
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
     ## Data Overview
-    
+
     Let's first check the data we're working with:
     """)
     return
@@ -134,7 +271,7 @@ def _(df, mdates, plt):
 
     plt.tight_layout()
     ax1
-    return (ax1, fig1)
+    return
 
 
 @app.cell(hide_code=True)
@@ -171,7 +308,7 @@ def _(df, mdates, plt):
 
     plt.tight_layout()
     ax2
-    return (ax2, fig2)
+    return
 
 
 @app.cell(hide_code=True)
@@ -224,7 +361,7 @@ def _(df, mdates, plt):
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
-    return (ax3, ax4, fig3)
+    return
 
 
 @app.cell(hide_code=True)
@@ -293,7 +430,7 @@ def _(df, mdates, plt):
 
     plt.tight_layout()
     plt.show()
-    return (axes_dashboard, fig4)
+    return
 
 
 @app.cell(hide_code=True)
@@ -314,20 +451,20 @@ def _(df, mo):
     - **Median Daily Revenue**: ${df["daily_revenue"].median():,.2f}
     - **Max Daily Revenue**: ${df["daily_revenue"].max():,.2f}
     - **Min Daily Revenue**: ${df["daily_revenue"].min():,.2f}
-    
+
     ### Order Statistics
     - **Mean Daily Orders**: {df["daily_orders"].mean():,.0f}
     - **Median Daily Orders**: {df["daily_orders"].median():,.0f}
     - **Max Daily Orders**: {df["daily_orders"].max():,}
     - **Min Daily Orders**: {df["daily_orders"].min():,}
-    
+
     ### Buyer Statistics
     - **Mean Daily Buyers**: {df["daily_buyers"].mean():,.0f}
     - **Median Daily Buyers**: {df["daily_buyers"].median():,.0f}
     - **Max Daily Buyers**: {df["daily_buyers"].max():,}
     - **Min Daily Buyers**: {df["daily_buyers"].min():,}
     """)
-    return (summary_stats,)
+    return
 
 
 if __name__ == "__main__":

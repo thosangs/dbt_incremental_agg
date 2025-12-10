@@ -1,8 +1,8 @@
 {{
   config(
     materialized='incremental',
-    incremental_strategy='merge',
-    unique_key='order_timestamp',
+    incremental_strategy='delete+insert',
+    unique_key='order_id',
     on_schema_change='append_new_columns'
   )
 }}

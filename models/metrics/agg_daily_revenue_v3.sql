@@ -1,7 +1,7 @@
 {{
   config(
     materialized='incremental',
-    incremental_strategy='merge',
+    incremental_strategy='delete+insert',
     unique_key='order_date',
     on_schema_change='append_new_columns'
   )
@@ -47,7 +47,7 @@ existing_data AS (
 
 combined AS (
     SELECT * FROM new_aggregates
-    UNION ALL
+    UNION ALL BY NAME
     SELECT * FROM existing_data
 )
 

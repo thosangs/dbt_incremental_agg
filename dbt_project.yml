@@ -13,7 +13,7 @@ models:
   pycon25_duckdb_demo:
     +materialized: view
     +pre-hook:
-      - "{{ log_processed_data(this) }}"
+      - "{{ log_processed_data(this,full_refresh=flags.FULL_REFRESH) }}"
     staging:
       +materialized: view
     metrics:

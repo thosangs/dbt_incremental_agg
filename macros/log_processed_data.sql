@@ -117,7 +117,7 @@
 
 
 {# Main macro: Log processed data for staging and aggregation models #}
-{% macro log_processed_data(model) %}
+{% macro log_processed_data(model,full_refresh) %}
   {% if execute %}
     {% set model_name = model.identifier %}
     
@@ -127,9 +127,12 @@
         {% set materialization = node.config.materialized %}
         {% set is_incremental = (materialization == 'incremental') %}
         
+        {# If full_refresh flag is True, treat as full refresh regardless of materialization #}
+        {% set is_full_refresh = full_refresh if full_refresh is not none else false %}
+        
         {# For staging models #}
         {% if 'stg_orders' in model_name %}
-          {% if is_incremental %}
+          {% if is_incremental and not is_full_refresh %}
             {% set table_exists = check_table_exists(model) %}
             
             {% if not table_exists %}
@@ -150,7 +153,7 @@
         {% if 'agg_daily_revenue' in model_name %}
           {% set staging_model = get_staging_model(model_name) %}
           
-          {% if is_incremental %}
+          {% if is_incremental and not is_full_refresh %}
             {% set table_exists = check_table_exists(model) %}
             
             {% if not table_exists %}
