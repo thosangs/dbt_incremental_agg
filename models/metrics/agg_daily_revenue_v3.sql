@@ -8,14 +8,14 @@
 }}
 
 -- Version 3: Incremental Aggregation with Sliding Window
--- This model demonstrates DuckDB's merge strategy with a sliding window,
+-- This model demonstrates DuckDB's delete+insert strategy with a sliding window,
 -- which efficiently updates only affected date ranges while preserving
 -- older, stable data.
 -- 
 -- Strategy:
 -- 1. Reprocess a rolling window (e.g., last 14 days) to catch late-arriving events
 -- 2. Preserve older data that is unlikely to change
--- 3. Use MERGE to update/insert records in the sliding window
+-- 3. Use delete+insert to update/insert records in the sliding window
 -- 4. Calculate running revenue over the complete dataset
 -- 
 -- Use case: Aggregations where late-arriving events need to be handled,

@@ -10,7 +10,7 @@
 -- Version 2: Incremental Event Processing
 -- This staging model processes orders incrementally using a rolling window.
 -- On incremental runs, it reprocesses the last 7 days to catch late-arriving events.
--- Uses merge strategy to efficiently update only affected records.
+-- Uses delete+insert strategy to efficiently update only affected records.
 -- 
 -- Use case: Event streams where new events arrive continuously,
 -- and you want to reprocess recent data to handle late-arriving events.
