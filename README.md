@@ -6,7 +6,7 @@
 
 ## 💰 The Cost Savings Story
 
-**The Problem:** Calculating daily overall users (running total) requires scanning entire history every day.
+**The Problem:** Calculating daily revenue aggregations (running total) requires scanning entire history every day.
 
 **Before (Full Batch):**
 
@@ -27,12 +27,14 @@
 **The Magic Line:**
 
 ```sql
-WHERE order_date >= (SELECT MAX(order_date) FROM {{ this }}) - INTERVAL 14 DAYS
+materialized='incremental'
 ```
 
 That's it. That's the line. One line. $1K saved. 🎯
 
-This project demonstrates a progressive journey through incremental data processing patterns using dbt and DuckDB. It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with sliding window using DuckDB's merge strategy.
+By configuring your aggregation model as incremental, dbt only processes new/changed data instead of scanning the entire history. Combined with a sliding window filter (e.g., `WHERE order_date >= CURRENT_DATE() - INTERVAL 14 DAYS`), you get efficient incremental updates that handle late-arriving events.
+
+This project demonstrates a progressive journey through incremental data processing patterns using dbt and DuckDB. It showcases three increasingly sophisticated approaches: full batch processing, incremental event processing, and incremental aggregation with sliding window using DuckDB's `delete+insert` strategy.
 
 **The repo is optimized for live demos**: everything runs locally in Docker, requires no external cloud credentials, and can be reset quickly. No credit card required! 💳✨
 
@@ -47,6 +49,7 @@ This project demonstrates a progressive journey through incremental data process
 - **Generated Store Transaction Data** 🛒 - Simulated store data (orders, revenue, buyers) over 90 days with realistic patterns
 - **Data generation script** that generates realistic store transaction data and exports as Hive-partitioned Parquet files using DuckDB
 - **DuckDB** embedded database for fast analytical queries (no external services needed!)
+- **Marimo** 📊 interactive notebook for visualizing revenue analytics (runs on port 8080)
 - **Docker Compose** orchestration for the entire stack (because who likes dependency hell? 😅)
 
 ---
@@ -102,16 +105,18 @@ graph LR
 
 **Pattern**: **Full Incremental** - Incremental staging + Incremental aggregation  
 **Use case**: Time-series aggregations with late-arriving events  
-**Trade-off**: Most sophisticated, handles late data correctly, leverages DuckDB's merge capabilities  
+**Trade-off**: Most sophisticated, handles late data correctly, uses DuckDB's `delete+insert` strategy for efficient updates  
 **Mood**: 🚀 "Perfect! Both staging AND aggregation are incremental!"
 
 **The Magic Line:**
 
 ```sql
-WHERE order_date >= (SELECT MAX(order_date) FROM {{ this }}) - INTERVAL 14 DAYS
+materialized='incremental'
 ```
 
 **That's it. That's the line that saves $1K.** ✨
+
+By configuring your aggregation model as incremental, dbt only processes new/changed data instead of scanning the entire history. Combined with a sliding window filter (e.g., `WHERE order_date >= CURRENT_DATE() - INTERVAL 14 DAYS`), you get efficient incremental updates that handle late-arriving events.
 
 Each demo includes both SQL and Python (PyArrow) models, so you can see the same pattern in both languages!
 
@@ -135,13 +140,16 @@ git clone <your-fork-or-repo-url> pycon25
 cd pycon25
 ```
 
-2. **Start dbt container**
+2. **Start containers**
 
 ```bash
 make up
 ```
 
-This starts the dbt container with DuckDB embedded, creates runtime directories, and generates store transaction data. No external services needed!
+This starts both the dbt container (with DuckDB embedded) and the marimo visualization notebook. It creates runtime directories and generates store transaction data. No external services needed!
+
+- **dbt + DuckDB**: Available in the `dbt` container
+- **Marimo visualization**: Available at http://localhost:8080 📊
 
 4. **Run a demo**
 
@@ -179,6 +187,17 @@ SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY order_date;
 SELECT order_date, daily_revenue, daily_orders FROM analytics.agg_daily_revenue_v3 ORDER BY order_date DESC LIMIT 30;
 ```
 
+6. **Visualize your data with Marimo** 📊
+
+After running your models, open the Marimo notebook at http://localhost:8080 to see interactive visualizations of your revenue analytics. The notebook connects directly to your DuckDB warehouse and provides:
+
+- **Daily revenue trends** 📈
+- **Running revenue totals** 💰
+- **Order volume analysis** 📦
+- **Interactive charts** powered by matplotlib
+
+The Marimo notebook (`scripts/visualize_revenue.py`) automatically queries your `analytics.agg_daily_revenue_v3` table and generates beautiful visualizations. No additional setup needed - just open your browser! 🎨
+
 ---
 
 ### Demo workflow: The Journey
@@ -205,18 +224,10 @@ make demo-02
 #### Step 3: Advanced Incremental Aggregation (Version 3) 🎯
 
 ```bash
-# First run - make up automatically generates store transaction data
 make demo-03
-
-# Generate additional data to simulate late-arriving orders
-docker compose exec -T dbt python scripts/generate_store_transactions.py \
-  --days 30 --partitioned-dir /data/partitioned
-
-# Re-run - only affected date ranges are reprocessed using sliding window
-make run
 ```
 
-**What happens**: Both staging AND aggregation are incremental! Staging processes last 7 days, aggregation reprocesses last 14 days sliding window. Uses DuckDB's `merge` strategy to efficiently update only affected date ranges, handling late-arriving events correctly. When you generate additional data, those orders will update the historical aggregations within the sliding window.  
+**What happens**: Both staging AND aggregation are incremental! Staging processes last 7 days, aggregation reprocesses last 14 days sliding window. Uses DuckDB's `delete+insert` strategy to efficiently update only affected date ranges, handling late-arriving events correctly. When you generate additional data, those orders will update the historical aggregations within the sliding window.  
 **Feels like**: Finally, both layers are smart! Staging is incremental AND aggregation is incremental! 🧠✨
 
 ---
@@ -225,9 +236,10 @@ make run
 
 ```text
 .
-├── Dockerfile                    # Python container for dbt + DuckDB dependencies
+├── Dockerfile.dbt                # Python container for dbt + DuckDB dependencies
+├── Dockerfile.marimo             # Python container for marimo visualization
 ├── Makefile                      # Orchestrates dockerized dbt and DuckDB
-├── docker-compose.yml            # dbt service
+├── docker-compose.yml            # dbt and marimo services
 ├── dbt_project.yml              # dbt project configuration
 ├── profiles/
 │   └── profiles.yml              # dbt profile for DuckDB connection
@@ -245,7 +257,8 @@ make run
 │       ├── agg_daily_revenue_py_v2.py                      # Version 2: Incremental events (Python/PyArrow) 🐍
 │       └── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
 ├── scripts/
-│   └── generate_store_transactions.py        # Generate store transaction data script
+│   ├── generate_store_transactions.py        # Generate store transaction data script
+│   └── visualize_revenue.py                 # Marimo notebook for revenue visualization 📊
 ├── data/                         # Created at runtime
 │   ├── partitioned/              # Daily partitioned parquet files (year=YYYY/month=MM/date=DD/*.parquet)
 │   └── warehouse/                # DuckDB database file (analytics.duckdb)
@@ -287,7 +300,7 @@ graph LR
 - **Storage**: DuckDB database file at `data/warehouse/analytics.duckdb`
 - **Schema**: `analytics` (default)
 - **Connection**: File-based DuckDB database (embedded, no external service)
-- **Incremental Strategy**: `merge` with sliding window (Version 3)
+- **Incremental Strategy**: `delete+insert` with sliding window (Version 3 SQL), `merge` (Version 3 Python)
 - **Python Models**: Supported natively - Python models execute in the same process as dbt
 
 ---
@@ -331,7 +344,7 @@ make clean
 ```mermaid
 graph TB
     subgraph DuckDB["🦆 DuckDB Features"]
-        Merge[Merge Strategy<br/>Incremental Updates]
+        Incremental[Incremental Strategy<br/>delete+insert/merge]
         Parquet[Parquet Native<br/>Read/Write]
         Python[Python Models<br/>PyArrow/Pandas]
         Embedded[Embedded DB<br/>No External Services]
@@ -344,7 +357,7 @@ graph TB
         Simple[Simple Setup]
     end
 
-    Merge --> Fast
+    Incremental --> Fast
     Parquet --> Fast
     Python --> Efficient
     Embedded --> Local
@@ -356,7 +369,7 @@ graph TB
 
 This project leverages DuckDB's superpowers:
 
-- **Merge Strategy**: DuckDB's `merge` statement efficiently handles incremental updates with sliding window (no more manual upserts! 🎉)
+- **Incremental Strategies**: DuckDB supports both `delete+insert` (SQL models) and `merge` (Python models) for efficient incremental updates with sliding window (no more manual upserts! 🎉)
 - **Parquet Reading**: Native support for reading Parquet files directly with `read_parquet()` function (no Spark needed! ✨)
 - **Parquet Writing**: Native support for writing Parquet files with `COPY ... TO` statement (partitioning made easy 🗂️)
 - **Data Generation**: Efficient generation and partitioning of store transaction data into daily partitions using DuckDB (because daily partitions = faster queries 🚀)
@@ -372,7 +385,7 @@ This project leverages DuckDB's superpowers:
 
 1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing (the "it works but..." approach 😅)
 2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts (the "faster but..." approach ⚡)
-3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's merge strategy with sliding window (the "finally, it's perfect!" approach 🎯)
+3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's `delete+insert` strategy with sliding window (the "finally, it's perfect!" approach 🎯)
 4. **Show Python models** 🐍:
    - `agg_daily_revenue_py_v1.py`, `agg_daily_revenue_py_v2.py`, `agg_daily_revenue_py_v3.py` - Same patterns in Python!
 5. **Show data generation**: Demonstrate how `make up` uses DuckDB to generate store transaction data and export as Hive-partitioned Parquet files (because organization matters! 🗂️)
@@ -384,13 +397,16 @@ This project leverages DuckDB's superpowers:
    ```sql
    SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY order_date DESC LIMIT 30;
    ```
-7. **Emphasize** 💡:
-   - How `is_incremental()` limits work to changed date ranges in sliding window (the magic line!)
-   - DuckDB's `merge` strategy vs. simpler incremental approaches (why it's better)
+7. **Show Marimo visualization** 📊: Open http://localhost:8080 to demonstrate interactive revenue analytics visualization. The notebook automatically connects to DuckDB and shows daily revenue trends, running totals, and order volume analysis.
+8. **Emphasize** 💡:
+   - The magic line is `materialized='incremental'` - this one configuration change saves $1K/month! 🎯
+   - How `is_incremental()` combined with sliding window filters limits work to changed date ranges
+   - DuckDB's `delete+insert` strategy (SQL) and `merge` strategy (Python) vs. simpler incremental approaches (why they're better)
    - The trade-offs between simplicity and efficiency (there's always a trade-off)
    - Generated store transaction data demonstrates realistic patterns (variable volume, returning customers - just like production! 📊)
    - All versions are available side-by-side for easy comparison (SQL vs Python, choose your weapon ⚔️)
    - Python models work seamlessly with DuckDB (no external cluster needed - local development is back! 🏠)
+   - Marimo provides interactive visualization without leaving your browser (no Jupyter needed! 📊)
 
 ---
 

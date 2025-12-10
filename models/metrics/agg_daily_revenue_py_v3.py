@@ -13,7 +13,7 @@ def model(dbt, session):
     Strategy:
     1. Reprocess a rolling window (e.g., last 14 days) to catch late-arriving events
     2. Preserve older data that is unlikely to change
-    3. Use MERGE to update/insert records in the sliding window
+    3. Use DELETE+INSERT to update/insert records in the sliding window
     4. Calculate running revenue over the complete dataset
 
     Use case: Aggregations where late-arriving events need to be handled,
@@ -30,7 +30,7 @@ def model(dbt, session):
 
     dbt.config(
         materialized="incremental",
-        incremental_strategy="merge",
+        incremental_strategy="delete+insert",
         unique_key="order_date",
         on_schema_change="append_new_columns",
     )
