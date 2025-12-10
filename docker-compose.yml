@@ -1,6 +1,8 @@
 services:
   dbt:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dbt
     container_name: pycon25-dbt
     working_dir: /app
     volumes:
@@ -8,75 +10,31 @@ services:
       - ./data:/data
     environment:
       DBT_PROFILES_DIR: /app/profiles
-      SPARK_MASTER: spark://spark-master:7077
-    depends_on:
-      - spark-thrift
     command: ["sleep", "infinity"]
-    networks:
-      - spark-network
 
-  spark-master:
-    image: apache/spark:3.5.0
-    container_name: pycon25-spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
-    environment:
-      - SPARK_MASTER_HOST=spark-master
-      - SPARK_MASTER_PORT=7077
-      - SPARK_MASTER_WEBUI_PORT=8080
+  marimo:
+    build:
+      context: .
+      dockerfile: Dockerfile.marimo
+    container_name: pycon25-marimo
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts
+      - ./data:/data
     ports:
       - "8080:8080"
-      - "7077:7077"
-    volumes:
-      - ./data:/data
-    networks:
-      - spark-network
-
-  spark-worker:
-    image: apache/spark:3.5.0
-    container_name: pycon25-spark-worker
-    depends_on:
-      - spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
-      - SPARK_WORKER_MEMORY=2g
-      - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_WEBUI_PORT=8081
-    ports:
-      - "8081:8081"
-    volumes:
-      - ./data:/data
-    networks:
-      - spark-network
-
-  spark-thrift:
-    image: apache/spark:3.5.0
-    container_name: pycon25-spark-thrift
+      MARIMO_CACHE_DIR: /home/app_user/.marimo
     depends_on:
-      - spark-master
-      - spark-worker
-    environment:
-      - SPARK_NO_DAEMONIZE=true
-      - SPARK_MASTER=spark://spark-master:7077
-      - SPARK_SQL_WAREHOUSE_DIR=/data/warehouse
-    command: >
-      /bin/bash -c "
-      mkdir -p /data/warehouse &&
-      chmod -R 777 /data/warehouse 2>/dev/null || true &&
-      /opt/spark/sbin/start-thriftserver.sh
-      --master spark://spark-master:7077
-      --conf spark.sql.warehouse.dir=/data/warehouse
-      --conf spark.sql.sources.partitionOverwriteMode=dynamic
-      --conf hive.exec.dynamic.partition.mode=nonstrict &&
-      tail -f /opt/spark/logs/*
-      "
-    ports:
-      - "10000:10000"
-      - "4040:4040"
-    volumes:
-      - ./data:/data
-    networks:
-      - spark-network
-
-networks:
-  spark-network:
-    driver: bridge
+      - dbt
+    command:
+      [
+        "marimo",
+        "edit",
+        "scripts/visualize_revenue.py",
+        "--host",
+        "0.0.0.0",
+        "-p",
+        "8080",
+        "--no-token",
+      ]

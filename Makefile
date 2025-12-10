@@ -1,7 +1,7 @@
-DBT := docker compose exec -T dbt dbt --profile pycon25_spark
+DBT := docker compose exec -T dbt dbt --profile pycon25_duckdb
 PY := docker compose exec -T dbt python
 
-.PHONY: help build setup seed run test clean spark-up spark-down spark-logs demo-late-data demo-01 demo-02 demo-03 dbt-shell
+.PHONY: help run test clean up down demo-01 demo-02 demo-03 dbt-shell
 
 help: ## Show this help
 	@echo "Usage: make <target>"
@@ -9,20 +9,19 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk -F':|##' '/^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-20s %s\n", $$1, $$3 }' $(MAKEFILE_LIST) | sort
 
-build: ## Build container images
-	@echo "[docker] Building images"
-	docker compose build
+up: ## Start dbt and marimo containers
+	@echo "[up-viz] Starting all services"
+	@mkdir -p data/warehouse data/partitioned
+	@chmod -R 777 data/warehouse data/partitioned || true
+	docker compose up -d
+	@echo "[docker] All containers ready"
+	@echo "[generate] Generating store transaction data"
+	$(PY) scripts/generate_store_transactions.py --partitioned-dir /data/partitioned
+	@echo "[marimo] Visualization notebook available at http://localhost:8080"
 
-setup: build ## Build images and prepare runtime dirs
-	@echo "[setup] Creating runtime dirs"
-	@mkdir -p data/warehouse data/raw data/partitioned
-	@chmod -R 777 data/warehouse data/raw data/partitioned || true
-
-download-data: ## Download NYC taxi data (default: 2022-2023) and partition by date
-	@echo "[download] Downloading NYC Yellow Taxi data"
-	$(PY) scripts/download_nyc_taxi_data.py --output-dir /data/raw
-	@echo "[partition] Partitioning data by trip_date using dbt model"
-	$(DBT) run --select partition_trips
+down: ## Stop all containers
+	@echo "[docker] Stopping all containers"
+	docker compose stop
 
 run: ## Run dbt models
 	@echo "[dbt] Running models"
@@ -41,51 +40,32 @@ dbt-shell: ## Open a shell into the dbt container
 	@echo "[dbt] Opening shell"
 	docker compose exec dbt bash
 
-spark-up: ## Start Spark cluster (master, worker, thrift) and dbt containers
-	@echo "[spark] Starting Spark cluster"
-	docker compose up -d spark-master spark-worker spark-thrift dbt
-	@echo "[spark] Waiting for Spark Thrift server to be ready..."
-	@sleep 10
-	@echo "[spark] Spark cluster ready. Thrift server at localhost:10000"
-
-spark-down: ## Stop Spark cluster containers
-	@echo "[spark] Stopping Spark cluster"
-	docker compose stop spark-master spark-worker spark-thrift
-
-spark-logs: ## Tail Spark Thrift server logs
-	@echo "[spark] Tailing Spark Thrift logs (Ctrl-C to stop)"
-	docker compose logs -f spark-thrift | cat
-
-partition-data: ## Partition raw Parquet files by trip_date using dbt model (defaults to SQL version)
-	@echo "[partition] Partitioning data by trip_date using dbt model"
-	$(DBT) run --select partition_trips
-
-partition-data-sql: ## Partition raw Parquet files using SQL dbt model
-	@echo "[partition] Partitioning data using SQL model"
-	$(DBT) run --select partition_trips.sql
-
-partition-data-python: ## Partition raw Parquet files using Python dbt model
-	@echo "[partition] Partitioning data using Python model"
-	$(DBT) run --select partition_trips.py
-
-demo-late-data: ## Download additional older data to simulate late-arriving trips
-	@echo "[demo] Downloading older data to simulate late-arriving trips"
-	$(PY) scripts/download_nyc_taxi_data.py --start-year 2021 --start-month 1 --end-year 2021 --end-month 3 --output-dir /data/raw --skip-existing
-	@echo "[partition] Partitioning late-arriving data using dbt model"
-	$(DBT) run --select partition_trips
-	@echo "[demo] Late-arriving data downloaded and partitioned. Re-run 'make run' to process."
-
 demo-01: ## Run Demo v1: Full Batch Processing
 	@echo "[demo-v1] Running full batch models"
-	$(DBT) run --select stg_trips agg_daily_revenue_v1
+	$(DBT) run --select +agg_daily_revenue_v1
 	@echo "[demo-v1] Demo complete!"
 
 demo-02: ## Run Demo v2: Incremental Event Processing
 	@echo "[demo-v2] Running incremental event models"
-	$(DBT) run --select stg_trips_v2 agg_daily_revenue_v2
+	$(DBT) run --select +agg_daily_revenue_v2
 	@echo "[demo-v2] Demo complete!"
 
-demo-03: ## Run Demo v3: Incremental Aggregation with Partition Overwrite
+demo-03: ## Run Demo v3: Incremental Aggregation with Sliding Window
 	@echo "[demo-v3] Running incremental aggregation models"
-	$(DBT) run --select stg_trips agg_daily_revenue_v3
+	$(DBT) run --select +agg_daily_revenue_v3
+	@echo "[demo-v3] Demo complete!"
+
+demo-01-py: ## Run Demo v1: Full Batch Processing
+	@echo "[demo-v1] Running full batch models"
+	$(DBT) run --select +agg_daily_revenue_py_v1
+	@echo "[demo-v1] Demo complete!"
+
+demo-02-py: ## Run Demo v2: Incremental Event Processing
+	@echo "[demo-v2] Running incremental event models"
+	$(DBT) run --select +agg_daily_revenue_py_v2
+	@echo "[demo-v2] Demo complete!"
+
+demo-03-py: ## Run Demo v3: Incremental Aggregation with Sliding Window
+	@echo "[demo-v3] Running incremental aggregation models"
+	$(DBT) run --select +agg_daily_revenue_py_v3
 	@echo "[demo-v3] Demo complete!"

@@ -1,12 +1,8 @@
-pycon25_spark:
+pycon25_duckdb:
   outputs:
     dev:
-      type: spark
-      method: thrift
-      host: spark-thrift
-      port: 10000
+      type: duckdb
+      path: /data/warehouse/analytics.duckdb
       schema: analytics
       threads: 4
-      connect_retries: 5
-      connect_timeout: 60
   target: dev

@@ -1,8 +1,8 @@
-name: "pycon25_spark_demo"
+name: "pycon25_duckdb_demo"
 version: "1.0.0"
 config-version: 2
 
-profile: pycon25_spark
+profile: pycon25_duckdb
 
 model-paths: ["models"]
 test-paths: ["tests"]
@@ -10,10 +10,10 @@ macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
 models:
-  pycon25_spark_demo:
+  pycon25_duckdb_demo:
     +materialized: view
-    +post-hook:
-      - "{{ log_processed_data(this) }}"
+    +pre-hook:
+      - "{{ log_processed_data(this,full_refresh=flags.FULL_REFRESH) }}"
     staging:
       +materialized: view
     metrics:
@@ -21,4 +21,5 @@ models:
       +on_schema_change: append_new_columns
 
 vars:
-  reprocess_window_days: 14
+  from_date: '{{ (modules.datetime.datetime.now() - modules.datetime.timedelta(days=14)).strftime("%Y-%m-%d")}}'
+  to_date: '{{modules.datetime.date.today().strftime("%Y-%m-%d")}}'

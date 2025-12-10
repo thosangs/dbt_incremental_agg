@@ -1,0 +1,17 @@
+models:
+  - name: agg_daily_revenue_py_v3
+    config:
+      from_date: '{{ (modules.datetime.datetime.now() - modules.datetime.timedelta(days=14)).strftime("%Y-%m-%d")}}'
+      to_date: '{{modules.datetime.date.today().strftime("%Y-%m-%d")}}'
+    description: Version 3 - Incremental aggregation with sliding window (recommended)
+    columns:
+      - name: order_date
+        tests: [not_null]
+      - name: daily_revenue
+        tests: [not_null]
+      - name: daily_orders
+        tests: [not_null]
+      - name: daily_buyers
+        tests: [not_null]
+      - name: running_revenue
+        tests: [not_null]

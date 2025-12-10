@@ -1,7 +1,8 @@
-dbt-spark[PyHive]==1.9.3
-pyspark==3.5.0
-pyhive==0.7.0
-thrift==0.16.0
-pure-sasl==0.6.2
+dbt-duckdb>=1.10.0
+duckdb>=0.10.0
 aiohttp==3.9.1
-holidays==0.34
+numpy>=1.24.0
+pandas>=2.0.0
+pyarrow>=14.0.0
+marimo[sql]>=0.17.0
+matplotlib>=3.7.0
