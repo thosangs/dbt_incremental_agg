@@ -12,8 +12,7 @@ SELECT
     SUM(revenue) AS daily_revenue,
     COUNT(DISTINCT order_id) AS daily_orders
 FROM {{ ref('stg_orders_v2') }}
-GROUP BY order_date
 {% if is_incremental() %}
-AND order_date >= DATE '{{ var("from_date") }}'
+WHERE order_date >= DATE '{{ var("from_date") }}'
 {% endif %}
-
+GROUP BY order_date

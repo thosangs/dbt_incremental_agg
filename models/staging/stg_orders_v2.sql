@@ -8,16 +8,15 @@
 }}
 
 SELECT
+    DATE(order_timestamp) AS order_date,
     order_id,
     buyer_id,
-    order_date,
     order_timestamp,
     product_id,
     quantity,
     unit_price,
     revenue,
-    payment_method,
-    DATE(order_timestamp) AS order_date
+    payment_method
 FROM {{ source('partitioned', 'store_transactions') }}
 WHERE order_timestamp IS NOT NULL
 {% if is_incremental() %}
