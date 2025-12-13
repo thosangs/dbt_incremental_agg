@@ -7,17 +7,20 @@ def model(dbt, session):
     Version 2: Incremental Event Processing (Python/PyArrow)
 
     This aggregation reads from the incremental staging table (stg_orders_v2).
-    Since stg_orders_v2 is incremental, we can rebuild the aggregation
-    from the full staging table each time (which is now efficient
-    because staging only contains new orders on each run).
+    Uses incremental materialization with delete+insert strategy to update
+    only affected date ranges.
 
-    This is a hybrid approach - incremental staging, full aggregation.
-
-    Demonstrates PyArrow batch processing for efficient aggregation.
+    Demonstrates PyArrow batch processing for efficient incremental aggregation.
     """
 
+    # Get from_date from dbt variables
+    from_date_str = dbt.config.get("from_date")
+
     dbt.config(
-        materialized="table",
+        materialized="incremental",
+        incremental_strategy="delete+insert",
+        unique_key="order_date",
+        on_schema_change="append_new_columns",
     )
 
     # ============================================================================
@@ -26,8 +29,7 @@ def model(dbt, session):
     def aggregate_daily_revenue_pyarrow(batch_reader: pa.RecordBatchReader):
         """
         PyArrow UDF: Process data in batches and aggregate daily revenue.
-        This function processes RecordBatches, aggregates by date,
-        and calculates running revenue.
+        This function processes RecordBatches and aggregates by date.
         """
         # Collect all DataFrames for aggregation (since we need to aggregate by date)
         all_dfs = []
@@ -58,17 +60,15 @@ def model(dbt, session):
                 "daily_orders",
             ]
 
-            # Calculate running revenue
+            # Sort by order_date
             daily_agg = daily_agg.sort_values("order_date")
-            daily_agg["running_revenue"] = daily_agg["daily_revenue"].cumsum()
 
-            # Select final columns
+            # Select final columns (no running revenue)
             final_df = daily_agg[
                 [
                     "order_date",
                     "daily_revenue",
                     "daily_orders",
-                    "running_revenue",
                 ]
             ].copy()
 
@@ -78,7 +78,6 @@ def model(dbt, session):
                     pa.field("order_date", pa.date32()),
                     pa.field("daily_revenue", pa.float64()),
                     pa.field("daily_orders", pa.int64()),
-                    pa.field("running_revenue", pa.float64()),
                 ]
             )
 
@@ -95,17 +94,88 @@ def model(dbt, session):
         100_000
     )  # Process in batches of 100k rows
 
-    # Process batches through PyArrow UDF
-    batch_iter = aggregate_daily_revenue_pyarrow(batch_reader)
+    if dbt.is_incremental and from_date_str:
+        # Incremental run: filter by from_date
+        from_date = pd.to_datetime(from_date_str).date()
+        
+        # Filter batches by from_date
+        filtered_dfs = []
+        for batch in batch_reader:
+            df = batch.to_pandas()
+            # Filter to only include dates >= from_date
+            df = df[df["order_date"] >= pd.Timestamp(from_date)]
+            if len(df) > 0:
+                filtered_dfs.append(df)
+        
+        if filtered_dfs:
+            # Create a new batch reader from filtered data
+            combined_df = pd.concat(filtered_dfs, ignore_index=True)
+            # Aggregate
+            daily_agg = (
+                combined_df.groupby("order_date")
+                .agg(
+                    {
+                        "revenue": "sum",
+                        "order_id": "nunique",
+                    }
+                )
+                .reset_index()
+            )
+            daily_agg.columns = [
+                "order_date",
+                "daily_revenue",
+                "daily_orders",
+            ]
+            daily_agg = daily_agg.sort_values("order_date")
+            
+            schema = pa.schema(
+                [
+                    pa.field("order_date", pa.date32()),
+                    pa.field("daily_revenue", pa.float64()),
+                    pa.field("daily_orders", pa.int64()),
+                ]
+            )
+            table = pa.Table.from_pandas(daily_agg, schema=schema)
+            batch_reader = pa.RecordBatchReader.from_batches(schema, table.to_batches())
+        else:
+            # Empty result
+            schema = pa.schema(
+                [
+                    pa.field("order_date", pa.date32()),
+                    pa.field("daily_revenue", pa.float64()),
+                    pa.field("daily_orders", pa.int64()),
+                ]
+            )
+            empty_df = pd.DataFrame(columns=["order_date", "daily_revenue", "daily_orders"])
+            table = pa.Table.from_pandas(empty_df, schema=schema)
+            batch_reader = pa.RecordBatchReader.from_batches(schema, table.to_batches())
+    else:
+        # Full refresh: process all data
+        batch_iter = aggregate_daily_revenue_pyarrow(batch_reader)
+        
+        # Create RecordBatchReader from processed batches
+        # We need to get the schema from the first batch
+        first_batch = next(batch_iter, None)
+        if first_batch:
+            schema = first_batch.schema
+            
+            # Create a new reader with the first batch and remaining batches
+            def batch_generator():
+                yield first_batch
+                yield from batch_iter
+            
+            batch_reader = pa.RecordBatchReader.from_batches(schema, batch_generator())
+        else:
+            # Empty result
+            schema = pa.schema(
+                [
+                    pa.field("order_date", pa.date32()),
+                    pa.field("daily_revenue", pa.float64()),
+                    pa.field("daily_orders", pa.int64()),
+                ]
+            )
+            empty_df = pd.DataFrame(columns=["order_date", "daily_revenue", "daily_orders"])
+            table = pa.Table.from_pandas(empty_df, schema=schema)
+            batch_reader = pa.RecordBatchReader.from_batches(schema, table.to_batches())
 
-    # Create RecordBatchReader from processed batches
-    # We need to get the schema from the first batch
-    first_batch = next(batch_iter)
-    schema = first_batch.schema
-
-    # Create a new reader with the first batch and remaining batches
-    def batch_generator():
-        yield first_batch
-        yield from batch_iter
-
-    return pa.RecordBatchReader.from_batches(schema, batch_generator())
+    return batch_reader

@@ -27,8 +27,7 @@ def model(dbt, session):
     def aggregate_daily_revenue_pyarrow(batch_reader: pa.RecordBatchReader):
         """
         PyArrow UDF: Process data in batches and aggregate daily revenue.
-        This function processes RecordBatches, aggregates by date,
-        and calculates running revenue.
+        This function processes RecordBatches and aggregates by date.
         """
         # Collect all DataFrames for aggregation (since we need to aggregate by date)
         all_dfs = []
@@ -59,17 +58,15 @@ def model(dbt, session):
                 "daily_orders",
             ]
 
-            # Calculate running revenue
+            # Sort by order_date
             daily_agg = daily_agg.sort_values("order_date")
-            daily_agg["running_revenue"] = daily_agg["daily_revenue"].cumsum()
 
-            # Select final columns
+            # Select final columns (no running revenue)
             final_df = daily_agg[
                 [
                     "order_date",
                     "daily_revenue",
                     "daily_orders",
-                    "running_revenue",
                 ]
             ].copy()
 
@@ -79,7 +76,6 @@ def model(dbt, session):
                     pa.field("order_date", pa.date32()),
                     pa.field("daily_revenue", pa.float64()),
                     pa.field("daily_orders", pa.int64()),
-                    pa.field("running_revenue", pa.float64()),
                 ]
             )
 
