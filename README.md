@@ -50,6 +50,7 @@ This project demonstrates a progressive journey through incremental data process
 - **Data generation script** that generates realistic store transaction data and exports as Hive-partitioned Parquet files using DuckDB
 - **DuckDB** embedded database for fast analytical queries (no external services needed!)
 - **Marimo** 📊 interactive notebook for visualizing revenue analytics (runs on port 8080)
+- **dbt documentation** 📚 automatically generated documentation server (runs on port 8081)
 - **Docker Compose** orchestration for the entire stack (because who likes dependency hell? 😅)
 
 ---
@@ -146,10 +147,11 @@ cd pycon25
 make up
 ```
 
-This starts both the dbt container (with DuckDB embedded) and the marimo visualization notebook. It creates runtime directories and generates store transaction data. No external services needed!
+This starts the dbt container (with DuckDB embedded), the marimo visualization notebook, and the dbt docs server. It creates runtime directories and generates store transaction data. No external services needed!
 
 - **dbt + DuckDB**: Available in the `dbt` container
 - **Marimo visualization**: Available at http://localhost:8080 📊
+- **dbt documentation**: Available at http://localhost:8081 📚
 
 4. **Run a demo**
 
@@ -197,6 +199,18 @@ After running your models, open the Marimo notebook at http://localhost:8080 to 
 - **Interactive charts** powered by matplotlib
 
 The Marimo notebook (`scripts/visualize_revenue.py`) automatically queries your `analytics.agg_daily_revenue_v3` table and generates beautiful visualizations. No additional setup needed - just open your browser! 🎨
+
+7. **View dbt documentation** 📚
+
+After running your models, view the automatically generated dbt documentation at http://localhost:8081. The dbt docs provide:
+
+- **Model lineage graphs** showing how data flows through your models 🔗
+- **Model documentation** with descriptions, columns, and tests 📋
+- **Source documentation** showing your parquet file sources 📊
+- **Test results** showing data quality checks ✅
+- **Interactive exploration** of your dbt project structure 🗺️
+
+The dbt docs container automatically generates documentation when started with `make up`. To regenerate docs after model changes, run `make dbt-docs`.
 
 ---
 
@@ -255,7 +269,10 @@ make demo-03
 │       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation (SQL, recommended)
 │       ├── agg_daily_revenue_py_v1.py                      # Version 1: Full batch (Python/PyArrow) 🐍
 │       ├── agg_daily_revenue_py_v2.py                      # Version 2: Incremental events (Python/PyArrow) 🐍
-│       └── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
+│       ├── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
+│       └── agg_daily_revenue_py_v3.yml                     # Model documentation for Python v3
+├── macros/
+│   └── log_processed_data.sql                              # Helper macro for logging processed data
 ├── scripts/
 │   ├── generate_store_transactions.py        # Generate store transaction data script
 │   └── visualize_revenue.py                 # Marimo notebook for revenue visualization 📊
@@ -314,10 +331,15 @@ make up
 # Build models
 make run
 
-# Run specific demo version
+# Run specific demo version (SQL models)
 make demo-01  # Version 1: Full batch (stg_orders_v1 + agg_daily_revenue_v1)
 make demo-02  # Version 2: Incremental events (stg_orders_v2 + agg_daily_revenue_v2)
 make demo-03  # Version 3: Incremental aggregation (stg_orders_v2 + agg_daily_revenue_v3)
+
+# Run specific demo version (Python models)
+make demo-01-py  # Version 1: Full batch (Python/PyArrow)
+make demo-02-py  # Version 2: Incremental events (Python/PyArrow)
+make demo-03-py  # Version 3: Incremental aggregation (Python/PyArrow)
 
 # Generate additional data (e.g., for late-arriving data demo)
 docker compose exec -T dbt python scripts/generate_store_transactions.py \
@@ -326,6 +348,9 @@ make run
 
 # Run dbt tests
 make test
+
+# Generate and view dbt documentation
+make dbt-docs  # Regenerates docs and restarts server at http://localhost:8081
 
 # Run specific model
 docker compose exec -T dbt dbt --profiles-dir profiles --profile pycon25_duckdb run --select metrics.agg_daily_revenue_v3
@@ -398,7 +423,8 @@ This project leverages DuckDB's superpowers:
    SELECT * FROM analytics.agg_daily_revenue_v3 ORDER BY order_date DESC LIMIT 30;
    ```
 7. **Show Marimo visualization** 📊: Open http://localhost:8080 to demonstrate interactive revenue analytics visualization. The notebook automatically connects to DuckDB and shows daily revenue trends, running totals, and order volume analysis.
-8. **Emphasize** 💡:
+8. **Show dbt documentation** 📚: Open http://localhost:8081 to demonstrate the automatically generated dbt documentation. Show model lineage, column documentation, and test results. This helps explain how data flows through the project.
+9. **Emphasize** 💡:
    - The magic line is `materialized='incremental'` - this one configuration change saves $1K/month! 🎯
    - How `is_incremental()` combined with sliding window filters limits work to changed date ranges
    - DuckDB's `delete+insert` strategy (SQL) and `merge` strategy (Python) vs. simpler incremental approaches (why they're better)
