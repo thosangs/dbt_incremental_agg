@@ -97,7 +97,7 @@ def model(dbt, session):
     if dbt.is_incremental and from_date_str:
         # Incremental run: filter by from_date
         from_date = pd.to_datetime(from_date_str).date()
-        
+
         # Filter batches by from_date
         filtered_dfs = []
         for batch in batch_reader:
@@ -106,7 +106,7 @@ def model(dbt, session):
             df = df[df["order_date"] >= pd.Timestamp(from_date)]
             if len(df) > 0:
                 filtered_dfs.append(df)
-        
+
         if filtered_dfs:
             # Create a new batch reader from filtered data
             combined_df = pd.concat(filtered_dfs, ignore_index=True)
@@ -127,7 +127,7 @@ def model(dbt, session):
                 "daily_orders",
             ]
             daily_agg = daily_agg.sort_values("order_date")
-            
+
             schema = pa.schema(
                 [
                     pa.field("order_date", pa.date32()),
@@ -146,24 +146,26 @@ def model(dbt, session):
                     pa.field("daily_orders", pa.int64()),
                 ]
             )
-            empty_df = pd.DataFrame(columns=["order_date", "daily_revenue", "daily_orders"])
+            empty_df = pd.DataFrame(
+                columns=["order_date", "daily_revenue", "daily_orders"]
+            )
             table = pa.Table.from_pandas(empty_df, schema=schema)
             batch_reader = pa.RecordBatchReader.from_batches(schema, table.to_batches())
     else:
         # Full refresh: process all data
         batch_iter = aggregate_daily_revenue_pyarrow(batch_reader)
-        
+
         # Create RecordBatchReader from processed batches
         # We need to get the schema from the first batch
         first_batch = next(batch_iter, None)
         if first_batch:
             schema = first_batch.schema
-            
+
             # Create a new reader with the first batch and remaining batches
             def batch_generator():
                 yield first_batch
                 yield from batch_iter
-            
+
             batch_reader = pa.RecordBatchReader.from_batches(schema, batch_generator())
         else:
             # Empty result
@@ -174,7 +176,9 @@ def model(dbt, session):
                     pa.field("daily_orders", pa.int64()),
                 ]
             )
-            empty_df = pd.DataFrame(columns=["order_date", "daily_revenue", "daily_orders"])
+            empty_df = pd.DataFrame(
+                columns=["order_date", "daily_revenue", "daily_orders"]
+            )
             table = pa.Table.from_pandas(empty_df, schema=schema)
             batch_reader = pa.RecordBatchReader.from_batches(schema, table.to_batches())
 

@@ -54,11 +54,9 @@ models:
         tests: [not_null]
       - name: daily_orders
         tests: [not_null]
-      - name: running_revenue
-        tests: [not_null]
 
   - name: agg_daily_revenue_v2
-    description: Version 2 - Incremental event processing (incremental staging, full aggregation)
+    description: Version 2 - Incremental event processing (incremental staging, incremental aggregation)
     columns:
       - name: order_date
         tests: [not_null]
@@ -92,17 +90,13 @@ models:
         tests: [not_null]
       - name: daily_orders
         tests: [not_null]
-      - name: running_revenue
-        tests: [not_null]
 
   - name: agg_daily_revenue_py_v2
-    description: Version 2 - Incremental event processing (incremental staging, full aggregation)
+    description: Version 2 - Incremental event processing (incremental staging, incremental aggregation)
     columns:
       - name: order_date
         tests: [not_null]
       - name: daily_revenue
         tests: [not_null]
       - name: daily_orders
-        tests: [not_null]
-      - name: running_revenue
         tests: [not_null]
