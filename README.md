@@ -1,8 +1,8 @@
-# 🚀 1 Line that saves $1K: Incremental Aggregations with dbt + DuckDB
+# 🚀 1 Line that saves $1K: Incremental Aggregations with dbt + Python
 
 **PyCon 2025 Talk Demo**
 
-> **TL;DR**: One line of SQL can save you $1,000/month in BigQuery costs. This repo shows you how. 🎯
+> **TL;DR**: One line that saves $1,000/month in Compute costs. This repo shows you how. 🎯
 
 ## 💰 The Cost Savings Story
 
@@ -60,54 +60,57 @@ This project demonstrates a progressive journey through incremental data process
 ```mermaid
 graph LR
     subgraph V1["Demo 01: Full Batch 🔥"]
-        V1_Staging[Staging: View<br/>Reads ALL]
+        V1_Staging[Staging: Table<br/>Rebuilds ALL]
         V1_Agg[Aggregation: Table<br/>Rebuilds ALL]
         V1_Cost[$31.25/day]
         V1_Staging --> V1_Agg --> V1_Cost
     end
 
-    subgraph V2["Demo 02: Hybrid ⚡"]
+    subgraph V2["Demo 02: Full Incremental ⚡"]
         V2_Staging[Staging: Incremental<br/>Last 7 days ✅]
-        V2_Agg[Aggregation: Table<br/>Rebuilds ALL ❌]
-        V2_Cost[$31.25/day]
+        V2_Agg[Aggregation: Incremental<br/>Last 7 days ✅]
+        V2_Cost[$1.25/day]
         V2_Staging --> V2_Agg --> V2_Cost
     end
 
-    subgraph V3["Demo 03: Full Incremental 🎯"]
+    subgraph V3["Demo 03: Incremental + Sliding Window 🎯"]
         V3_Staging[Staging: Incremental<br/>Last 7 days ✅]
         V3_Agg[Aggregation: Incremental<br/>Sliding window ✅]
         V3_Cost[$1.25/day]
         V3_Staging --> V3_Agg --> V3_Cost
     end
 
-    V1 -->|Incremental Staging| V2
-    V2 -->|Incremental Aggregation| V3
+    V1 -->|Incremental Staging + Aggregation| V2
+    V2 -->|Add Sliding Window + Running Totals| V3
 
     style V1 fill:#ffcccc
-    style V2 fill:#fff4cc
-    style V3 fill:#ccffcc
+    style V2 fill:#ccffcc
+    style V3 fill:#95e1d3
 ```
 
 #### Demo 01: Full Batch Processing
 
-**Pattern**: Full table refresh on every run  
+**Pattern**: Full table refresh on every run (both staging and aggregation)  
 **Use case**: Small datasets, infrequent updates  
 **Trade-off**: Simple but inefficient for large datasets  
+**Output**: Daily revenue and orders (no running total)  
 **Mood**: 😊 "It works!" → 😰 "Why is this so slow?!" → 💸 "Why is this so expensive?!"
 
-#### Demo 02: Incremental Event Processing (Hybrid)
+#### Demo 02: Incremental Event Processing ⚡
 
-**Pattern**: **Hybrid** - Incremental staging, full aggregation refresh  
-**Use case**: When staging is large but aggregation is small  
-**Trade-off**: Efficient staging, but aggregation rebuilds everything  
-**Mood**: 🎉 "Staging is incremental!" → 😅 "But aggregation still scans everything..."
+**Pattern**: **Full Incremental** - Incremental staging + Incremental aggregation  
+**Use case**: When you need incremental updates but don't need running totals  
+**Trade-off**: Efficient incremental processing, but no cumulative metrics  
+**Output**: Daily revenue and orders (no running total)  
+**Mood**: 🎉 "Both staging AND aggregation are incremental!" → 😊 "Fast and efficient!"
 
 #### Demo 03: Incremental Aggregation with Sliding Window ⭐
 
-**Pattern**: **Full Incremental** - Incremental staging + Incremental aggregation  
-**Use case**: Time-series aggregations with late-arriving events  
+**Pattern**: **Full Incremental with Sliding Window** - Incremental staging + Incremental aggregation with sliding window  
+**Use case**: Time-series aggregations with late-arriving events that need running totals  
 **Trade-off**: Most sophisticated, handles late data correctly, uses DuckDB's `delete+insert` strategy for efficient updates  
-**Mood**: 🚀 "Perfect! Both staging AND aggregation are incremental!"
+**Output**: Daily revenue, orders, buyers, and running revenue total  
+**Mood**: 🚀 "Perfect! Both staging AND aggregation are incremental, plus running totals!"
 
 **The Magic Line:**
 
@@ -231,9 +234,9 @@ make demo-01
 make demo-02
 ```
 
-**What happens**: Staging is incremental (processes last 7 days), but aggregation still rebuilds everything from staging.  
-**Feels like**: Your staging table is smart, but aggregation still reads everything from it 😅  
-**Key insight**: Incremental staging doesn't help if aggregation reads the full staging table!
+**What happens**: Both staging and aggregation are incremental! Staging processes last 7 days, aggregation processes last 7 days incrementally.  
+**Feels like**: Both layers are smart! Staging is incremental AND aggregation is incremental! 🎉  
+**Key insight**: Full incremental pipeline - both staging and aggregation only process new data!
 
 #### Step 3: Advanced Incremental Aggregation (Version 3) 🎯
 
@@ -261,15 +264,15 @@ make demo-03
 │   ├── schema.yml                # Model documentation and tests
 │   ├── sources.yml               # Source definitions for parquet files
 │   ├── staging/
-│   │   ├── stg_orders_v1.sql        # Staging model (view - used by v1)
+│   │   ├── stg_orders_v1.sql        # Staging model (table - used by v1)
 │   │   └── stg_orders_v2.sql        # Incremental staging (used by v2 & v3)
 │   └── metrics/
-│       ├── agg_daily_revenue_v1.sql                        # Version 1: Full batch (SQL)
-│       ├── agg_daily_revenue_v2.sql                        # Version 2: Incremental events (SQL)
-│       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation (SQL, recommended)
-│       ├── agg_daily_revenue_py_v1.py                      # Version 1: Full batch (Python/PyArrow) 🐍
-│       ├── agg_daily_revenue_py_v2.py                      # Version 2: Incremental events (Python/PyArrow) 🐍
-│       ├── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation (Python/PyArrow) 🐍⭐
+│       ├── agg_daily_revenue_v1.sql                        # Version 1: Full batch, no running total (SQL)
+│       ├── agg_daily_revenue_v2.sql                        # Version 2: Incremental aggregation, no running total (SQL)
+│       ├── agg_daily_revenue_v3.sql                        # Version 3: Incremental aggregation with sliding window + running total (SQL, recommended)
+│       ├── agg_daily_revenue_py_v1.py                      # Version 1: Full batch, no running total (Python/PyArrow) 🐍
+│       ├── agg_daily_revenue_py_v2.py                      # Version 2: Incremental aggregation, no running total (Python/PyArrow) 🐍
+│       ├── agg_daily_revenue_py_v3.py                      # Version 3: Incremental aggregation with sliding window + running total (Python/PyArrow) 🐍⭐
 │       └── agg_daily_revenue_py_v3.yml                     # Model documentation for Python v3
 ├── macros/
 │   └── log_processed_data.sql                              # Helper macro for logging processed data
@@ -409,8 +412,8 @@ This project leverages DuckDB's superpowers:
 ### Notes for the live demo 🎤
 
 1. **Start with Version 1** (`make demo-01`) to show the simplest approach - full batch processing (the "it works but..." approach 😅)
-2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts (the "faster but..." approach ⚡)
-3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's `delete+insert` strategy with sliding window (the "finally, it's perfect!" approach 🎯)
+2. **Progress to Version 2** (`make demo-02`) to introduce incremental event processing concepts - both staging and aggregation are incremental (the "fast and efficient!" approach ⚡)
+3. **Finish with Version 3** (`make demo-03`) to showcase DuckDB's `delete+insert` strategy with sliding window and running totals (the "finally, it's perfect with running totals!" approach 🎯)
 4. **Show Python models** 🐍:
    - `agg_daily_revenue_py_v1.py`, `agg_daily_revenue_py_v2.py`, `agg_daily_revenue_py_v3.py` - Same patterns in Python!
 5. **Show data generation**: Demonstrate how `make up` uses DuckDB to generate store transaction data and export as Hive-partitioned Parquet files (because organization matters! 🗂️)
@@ -426,9 +429,13 @@ This project leverages DuckDB's superpowers:
 8. **Show dbt documentation** 📚: Open http://localhost:8081 to demonstrate the automatically generated dbt documentation. Show model lineage, column documentation, and test results. This helps explain how data flows through the project.
 9. **Emphasize** 💡:
    - The magic line is `materialized='incremental'` - this one configuration change saves $1K/month! 🎯
+   - Version 1: Full batch (simple but expensive) - both staging and aggregation rebuild everything
+   - Version 2: Full incremental (fast and efficient) - both staging and aggregation are incremental, but no running totals
+   - Version 3: Incremental with sliding window (most sophisticated) - handles late-arriving events and calculates running totals
    - How `is_incremental()` combined with sliding window filters limits work to changed date ranges
    - DuckDB's `delete+insert` strategy (SQL) and `merge` strategy (Python) vs. simpler incremental approaches (why they're better)
    - The trade-offs between simplicity and efficiency (there's always a trade-off)
+   - Running totals require sliding window approach (Version 3) to handle late-arriving events correctly
    - Generated store transaction data demonstrates realistic patterns (variable volume, returning customers - just like production! 📊)
    - All versions are available side-by-side for easy comparison (SQL vs Python, choose your weapon ⚔️)
    - Python models work seamlessly with DuckDB (no external cluster needed - local development is back! 🏠)
